@@ -6,6 +6,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Text;
+using System.IO;
 
 namespace GitDesktop
 {
@@ -14,7 +15,7 @@ namespace GitDesktop
         private readonly IWindow _window;
         private readonly GL _gl;
         private readonly ImGuiIOPtr _io;
-        private Shader? _shader;
+        private readonly Shader _shader;
 
         private uint _fontTexture;
 
@@ -34,19 +35,22 @@ namespace GitDesktop
             _io.ConfigFlags |= ImGuiConfigFlags.DockingEnable;
             //_io.ConfigFlags |= ImGuiConfigFlags.ViewportsEnable; // Enable multi-viewport later
             
+            _shader = CreateShaders();
+
             CreateDeviceResources();
+        }
+
+        private Shader CreateShaders()
+        {           
+            string vertexSource = File.ReadAllText("Shaders/ImGuiVert.glsl");
+            string fragmentSource = File.ReadAllText("Shaders/ImGuiFrag.glsl");
+            return new Shader(_gl, vertexSource, fragmentSource);
         }
 
         private void CreateDeviceResources()
         {
-            CreateShaders();
             CreateBuffers();
             CreateFontTexture();            
-        }
-
-        private void CreateShaders()
-        {
-            throw new NotImplementedException();
         }
 
         private unsafe void CreateBuffers()
@@ -196,6 +200,34 @@ namespace GitDesktop
         private unsafe void RenderDrawData(ImDrawDataPtr drawData)
         {
             _shader.Use();
+            _gl.Uniform1(_shader.TextureLocation, 0); // use TextureUnit.Texture0
+
+            float left = drawData.DisplayPos.X;
+            float right = drawData.DisplayPos.X + drawData.DisplaySize.X;
+
+            float top = drawData.DisplayPos.Y;
+            float bottom = drawData.DisplayPos.Y + drawData.DisplaySize.Y;
+
+            float[] projection =
+            {
+                2.0f / (right - left), 0.0f,                    0.0f, 0.0f,
+                0.0f,                  2.0f / (top - bottom),  0.0f, 0.0f,
+                0.0f,                  0.0f,                  -1.0f, 0.0f,
+                (right + left) / (left - right),
+                (top + bottom) / (bottom - top),
+                0.0f,
+                1.0f
+            };
+
+            fixed (float* matrix = projection)
+            {
+                _gl.UniformMatrix4(
+                    _shader.ProjectionMatrixLocation,
+                    1,
+                    false,
+                    matrix);
+            }            
+
             _gl.BindVertexArray(_vertexArray);
 
             int globalIdxOffset = 0;
@@ -210,6 +242,7 @@ namespace GitDesktop
                     nint indexOffset = (nint)((cmd.IdxOffset + globalIdxOffset) * sizeof(ushort));
                     nint baseVertex = (nint)(cmd.VtxOffset + globalVtxOffset);
 
+                    _gl.ActiveTexture(TextureUnit.Texture0);
                     _gl.BindTexture(TextureTarget.Texture2D, (uint)cmd.TextureId);
                     _gl.DrawElementsBaseVertex(
                                         PrimitiveType.Triangles,

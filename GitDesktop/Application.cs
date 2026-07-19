@@ -38,8 +38,20 @@ namespace GitDesktop
         {
             _gl = _window.CreateOpenGL();
             _gl.ClearColor(0.1f, 0.15f, 0.3f, 1.0f);
-            
-            _imGui = new ImGuiController(_window, _gl);
+
+            _gl.Enable(GLEnum.Blend);
+
+            _gl.BlendEquation(GLEnum.FuncAdd);
+
+            _gl.BlendFunc(
+                BlendingFactor.SrcAlpha,
+                BlendingFactor.OneMinusSrcAlpha);
+
+            _gl.Disable(GLEnum.CullFace);
+            _gl.Disable(GLEnum.DepthTest);
+            _gl.Disable(GLEnum.StencilTest);
+
+            _imGui = new ImGuiController(_window, _gl);            
         }
 
         private void OnUpdate(double deltaTime)
@@ -49,6 +61,11 @@ namespace GitDesktop
 
         private void OnRender(double deltaTime)
         {
+            _gl.Viewport(
+                0,
+                0,
+                (uint)_window.FramebufferSize.X,
+                (uint)_window.FramebufferSize.Y);
             _gl.Clear(ClearBufferMask.ColorBufferBit);
 
             _imGui.Update(deltaTime);
