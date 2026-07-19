@@ -394,6 +394,8 @@ namespace GitDesktop
 
         private unsafe void RenderDrawData(ImDrawDataPtr drawData)
         {
+            _gl.Enable(GLEnum.ScissorTest);
+
             _shader.Use();
             _gl.Uniform1(_shader.TextureLocation, 0); // use TextureUnit.Texture0
 
@@ -427,6 +429,7 @@ namespace GitDesktop
 
             int globalIdxOffset = 0;
             int globalVtxOffset = 0;
+
             for (int i = 0; i < drawData.CmdListsCount; i++)
             {
                 ImDrawListPtr list = drawData.CmdLists[i];
@@ -434,6 +437,14 @@ namespace GitDesktop
                 for (int j = 0; j < list.CmdBuffer.Size; j++)
                 {
                     ImDrawCmdPtr cmd = list.CmdBuffer[j];
+
+                    Vector4 clip = cmd.ClipRect;
+                    _gl.Scissor(
+                        (int)clip.X,
+                        (int)(drawData.DisplaySize.Y - clip.W),
+                        (uint)(clip.Z - clip.X),
+                        (uint)(clip.W - clip.Y));
+
                     nint indexOffset = (nint)((cmd.IdxOffset + globalIdxOffset) * sizeof(ushort));
                     nint baseVertex = (nint)(cmd.VtxOffset + globalVtxOffset);
 
@@ -452,6 +463,7 @@ namespace GitDesktop
             }
 
             _gl.BindVertexArray(0);
+            _gl.Disable(GLEnum.ScissorTest);
         }
 
         public void Dispose()

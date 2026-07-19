@@ -41,7 +41,7 @@ namespace GitDesktop
             _gl = _window.CreateOpenGL();
             _gl.ClearColor(0.1f, 0.15f, 0.3f, 1.0f);
 
-            _gl.Enable(GLEnum.Blend);
+            _gl.Enable(GLEnum.Blend); 
 
             _gl.BlendEquation(GLEnum.FuncAdd);
 
