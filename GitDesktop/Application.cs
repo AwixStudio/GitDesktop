@@ -1,10 +1,11 @@
-﻿using Silk.NET.Maths;
+﻿using ImGuiNET;
+using Silk.NET.Input;
+using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 using System;
 using System.Collections.Generic;
 using System.Text;
-using ImGuiNET;
 
 namespace GitDesktop
 {
@@ -13,6 +14,7 @@ namespace GitDesktop
         private readonly IWindow _window;
         private GL _gl = null!;
         private ImGuiController _imGui = null!;
+        private IInputContext _input = null!;
 
         public Application()
         {
@@ -51,7 +53,8 @@ namespace GitDesktop
             _gl.Disable(GLEnum.DepthTest);
             _gl.Disable(GLEnum.StencilTest);
 
-            _imGui = new ImGuiController(_window, _gl);            
+            _input = _window.CreateInput();
+            _imGui = new ImGuiController(_window, _gl, _input);
         }
 
         private void OnUpdate(double deltaTime)
@@ -77,7 +80,10 @@ namespace GitDesktop
         {
             ImGui.Begin("Hello");
             ImGui.Text("Hello GitDesktop!");
-            ImGui.Button("Click me");
+            if (ImGui.Button("Click me"))
+            {
+                Console.WriteLine("Button clicked!");
+            }
             ImGui.End();
         }
 
