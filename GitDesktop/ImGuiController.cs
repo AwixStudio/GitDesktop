@@ -11,7 +11,7 @@ using System.Text;
 
 namespace GitDesktop
 {
-    internal class ImGuiController
+    internal class ImGuiController : IDisposable
     {
         private readonly IWindow _window;
         private readonly GL _gl;
@@ -452,6 +452,20 @@ namespace GitDesktop
             }
 
             _gl.BindVertexArray(0);
+        }
+
+        public void Dispose()
+        {
+            _shader.Dispose();
+
+            _gl.DeleteTexture(_fontTexture);
+
+            _gl.DeleteBuffer(_vertexBuffer);
+            _gl.DeleteBuffer(_indexBuffer);
+
+            _gl.DeleteVertexArray(_vertexArray);
+
+            ImGui.DestroyContext();
         }
     }
 }

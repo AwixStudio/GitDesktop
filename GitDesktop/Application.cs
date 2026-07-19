@@ -89,7 +89,7 @@ namespace GitDesktop
 
         private void OnClosing()
         {
-
+            _imGui.Dispose();
         }
     }
 }
