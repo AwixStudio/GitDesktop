@@ -42,6 +42,7 @@ namespace GitDesktop
             ViewManager.RemoveView = (view) => views.Remove(view);
 
             views.Add(new MainView(repositoryManager));
+            views.Add(new ChangesView(repositoryManager));
         }
 
         public void Run()

@@ -12,7 +12,7 @@ namespace GitDesktop.Git
 
         private List<Repository> repositories = [];
         public IReadOnlyList<Repository> Repositories => repositories;
-        public Repository? CurrentRepository { get; private set; }
+        public Repository? CurrentRepository { get; private set; }        
 
         public RepositoryManager()
         {
@@ -129,6 +129,15 @@ namespace GitDesktop.Git
 
         public string[] GetRepositoryPaths() => Repositories.Select(r => r.Path).ToArray();
         public string[] GetRepositoryNames() => Repositories.Select(r => r.Name).ToArray();
+
+        public void RefreshChanges()
+        {
+            if(CurrentRepository != null)
+            {
+                GitStatus status = GitService.GetStatus(CurrentRepository.Path);
+                CurrentRepository.RefreshChanges(status.Files);
+            }
+        }
     }
 
     internal class AppConfig
@@ -149,6 +158,9 @@ namespace GitDesktop.Git
         private List<GitBranch> branches = [];
         public IReadOnlyList<GitBranch> Branches => branches;
 
+        private List<GitFile> changes = [];
+        public IReadOnlyList<GitFile> Changes => changes;
+
         public Repository(string name, string path)
         {
             Name = name;
@@ -157,6 +169,9 @@ namespace GitDesktop.Git
             (var branches, var currentBranch) = GitService.GetBranches(path);
             CurrentBranch = currentBranch;
             this.branches = branches;
+
+            GitStatus status = GitService.GetStatus(Path);
+            changes = status.Files;
         }
 
         public void ChangeBranch(GitBranch newBranch)
@@ -173,6 +188,9 @@ namespace GitDesktop.Git
                 {
                     GitService.CheckoutBranch(Path, newBranch.Name);
                     CurrentBranch = newBranch;
+
+                    status = GitService.GetStatus(Path);
+                    changes = status.Files;
                 }
                 catch (Exception ex)
                 {
@@ -182,6 +200,43 @@ namespace GitDesktop.Git
             else
             {
                 Logger.Log("To switch branch you need first to clear all your current changes by committing, stashing or discarding them.");
+            }
+        }
+
+        public void RefreshChanges(List<GitFile> newChanges)
+        {
+            // Remove files that are no longer in the status
+            for (int i = changes.Count - 1; i >= 0; i--)
+            {
+                var existingFile = changes[i];
+                if (!newChanges.Any(f => f.Path == existingFile.Path))
+                {
+                    changes.RemoveAt(i);
+                }
+            }
+
+            // Update existing files and add new ones
+            foreach (var newFile in newChanges)
+            {
+                var existingFile = changes.FirstOrDefault(f => f.Path == newFile.Path);
+                if (existingFile != null)
+                {
+                    // Update existing file's state but preserve MarkedForCommit flag
+                    var index = changes.IndexOf(existingFile);
+                    var updatedFile = new GitFile
+                    {
+                        Path = newFile.Path,
+                        IndexState = newFile.IndexState,
+                        WorkingTreeState = newFile.WorkingTreeState,
+                        MarkedForCommit = existingFile.MarkedForCommit
+                    };
+                    changes[index] = updatedFile;
+                }
+                else
+                {
+                    // Add new file
+                    changes.Add(newFile);
+                }
             }
         }
     }
