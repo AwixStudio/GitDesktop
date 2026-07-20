@@ -165,7 +165,16 @@ namespace GitDesktop.Git
             {
                 throw new InvalidOperationException($"Branch {newBranch.Name} does not exist in repository {Name}");
             }
-            CurrentBranch = newBranch;
+
+            try
+            {
+                GitService.CheckoutBranch(Path, newBranch.Name);
+                CurrentBranch = newBranch;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to checkout branch {newBranch.Name}: {ex.Message}");
+            }
         }
     }
 }

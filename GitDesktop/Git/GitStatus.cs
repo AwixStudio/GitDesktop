@@ -7,5 +7,7 @@ namespace GitDesktop.Git
     internal class GitStatus
     {
         public List<GitFile> Files { get; } = [];
+
+        public bool IsClean => Files.Count == 0;
     }
 }

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace GitDesktop.Git
 {
@@ -52,6 +53,11 @@ namespace GitDesktop.Git
             return (branches, currentBranch);
         }
 
+        public static void CheckoutBranch(string repositoryPath, string branchName)
+        {
+            Execute(repositoryPath, $"checkout \"{branchName}\"");
+        }
+
         private static string Execute(string repositoryPath, string arguments)
         {
             Process process = new();
@@ -64,6 +70,9 @@ namespace GitDesktop.Git
             process.Start();
             string output = process.StandardOutput.ReadToEnd();
             process.WaitForExit();
+
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException($"Git command failed with exit code {process.ExitCode}");
 
             return output;
         }
