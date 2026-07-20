@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace GitDesktop.Git
 {
@@ -56,6 +55,45 @@ namespace GitDesktop.Git
         public static void CheckoutBranch(string repositoryPath, string branchName)
         {
             Execute(repositoryPath, $"checkout \"{branchName}\"");
+        }
+
+        public static void CommitChanges(string repositoryPath, string commitMessage, List<GitFile> files)
+        {
+            var selectedFiles = files
+                .Where(f => f.MarkedForCommit)
+                .Select(f => $"\"{f.Path}\"");
+
+            string arguments = "add " + string.Join(' ', selectedFiles);
+
+            Execute(repositoryPath, arguments);
+            Execute(repositoryPath, $"commit -m \"{commitMessage}\"");
+            Execute(repositoryPath, "push");
+        }
+
+        public static List<GitCommit> GetCommitLog(string repositoryPath, string branchName, int limit = 100)
+        {
+            string gitLogCmd = $"log {branchName} --pretty=format:\"%H|%an|%ai|%s|%P\" --max-count={limit}";
+            string gitLogCmdResult = Execute(repositoryPath, gitLogCmd);
+
+            List<GitCommit> commits = [];
+            foreach (string line in gitLogCmdResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = line.Split('|');
+                if (parts.Length >= 5)
+                {
+                    string hash = parts[0].Trim();
+                    string author = parts[1].Trim();
+                    if (DateTime.TryParse(parts[2].Trim(), out DateTime date))
+                    {
+                        string message = parts[3].Trim();
+                        string parentHash = parts[4].Trim().Split(' ').FirstOrDefault() ?? "";
+
+                        commits.Add(new GitCommit(hash, author, date, message, parentHash));
+                    }
+                }
+            }
+
+            return commits;
         }
 
         private static string Execute(string repositoryPath, string arguments)

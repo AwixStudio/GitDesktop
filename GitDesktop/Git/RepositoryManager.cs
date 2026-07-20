@@ -161,6 +161,9 @@ namespace GitDesktop.Git
         private List<GitFile> changes = [];
         public IReadOnlyList<GitFile> Changes => changes;
 
+        private List<GitCommit> commits = [];
+        public IReadOnlyList<GitCommit> Commits => commits;
+
         public Repository(string name, string path)
         {
             Name = name;
@@ -172,6 +175,15 @@ namespace GitDesktop.Git
 
             GitStatus status = GitService.GetStatus(Path);
             changes = status.Files;
+
+            try
+            {
+                commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+            }
+            catch
+            {
+                commits = [];
+            }
         }
 
         public void ChangeBranch(GitBranch newBranch)
@@ -191,6 +203,15 @@ namespace GitDesktop.Git
 
                     status = GitService.GetStatus(Path);
                     changes = status.Files;
+
+                    try
+                    {
+                        commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+                    }
+                    catch
+                    {
+                        commits = [];
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -237,6 +258,29 @@ namespace GitDesktop.Git
                     // Add new file
                     changes.Add(newFile);
                 }
+            }
+        }
+
+        public void CommitChanges(string commitMessage)
+        {            
+            try
+            {
+                GitService.CommitChanges(Path, commitMessage, changes);                                
+                GitStatus status = GitService.GetStatus(Path);
+                RefreshChanges(status.Files);
+
+                try
+                {
+                    commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+                }
+                catch
+                {
+                    commits = [];
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Failed to commit changes: {ex.Message}");
             }
         }
     }

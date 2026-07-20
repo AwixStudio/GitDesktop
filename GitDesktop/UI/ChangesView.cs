@@ -9,6 +9,8 @@ namespace GitDesktop.UI
     internal class ChangesView : IRender
     {
         private readonly RepositoryManager repositoryManager;
+        private string commitMessage = string.Empty;
+        private int lastSelectedChangeIndex = -1;
 
         public ChangesView(RepositoryManager repositoryManager)
         {
@@ -17,12 +19,21 @@ namespace GitDesktop.UI
 
         public void Render()
         {
-            ImGui.Begin("Changes");
+            ImGuiWindowFlags flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoCollapse;
+            ImGui.SetNextWindowDockID(ImGui.GetID("LeftPanel"), ImGuiCond.Always);
+
+            float yOffset = ImGui.GetFrameHeightWithSpacing() + 55f;
+            float windowHeight = ImGui.GetIO().DisplaySize.Y - yOffset - 5f;
+
+            ImGui.SetNextWindowPos(new System.Numerics.Vector2(5, yOffset), ImGuiCond.Always);
+            ImGui.SetNextWindowSize(new System.Numerics.Vector2(550, windowHeight), ImGuiCond.Always);
+
+            ImGui.Begin("Changes", flags);
 
             Repository? currentRepository = repositoryManager.CurrentRepository;
             if (currentRepository == null)
             {
-                ImGui.TextDisabled("Nie wybrano repozytorium");
+                ImGui.TextDisabled("No repository selected");
                 ImGui.End();
                 return;
             }
@@ -31,53 +42,95 @@ namespace GitDesktop.UI
 
             if (changes.Count == 0)
             {
-                ImGui.TextDisabled("Brak zmian");
+                ImGui.TextDisabled("No changes to commit");
                 ImGui.End();
                 return;
             }
 
-            ImGui.Text($"Zmian: {changes.Count}");
+            ImGui.Text($"Changes: {changes.Count}");
             ImGui.Separator();
 
-            if (ImGui.BeginTable("###ChangesList", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY))
+            // Container for the changes list with fixed height
+            if (ImGui.BeginChild("ChangesListContainer", new System.Numerics.Vector2(-1, -110f)))
             {
-                ImGui.TableSetupColumn("Zaznacz", ImGuiTableColumnFlags.WidthFixed, 50);
-                ImGui.TableSetupColumn("Plik", ImGuiTableColumnFlags.WidthStretch);
-                ImGui.TableHeadersRow();
-
-                foreach (var change in changes)
+                if (ImGui.BeginTable("###ChangesList", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY))
                 {
-                    ImGui.TableNextRow();
+                    ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 20);
+                    ImGui.TableSetupColumn("File", ImGuiTableColumnFlags.WidthStretch);
+                    ImGui.TableHeadersRow();
 
-                    // Checkbox column
-                    ImGui.TableSetColumnIndex(0);
-                    bool marked = change.MarkedForCommit;
-                    if (ImGui.Checkbox($"##checkbox_{change.Path}", ref marked))
+                    int changeIndex = 0;
+                    foreach (var change in changes)
                     {
-                        change.MarkedForCommit = marked;
+                        ImGui.TableNextRow();
+
+                        // Checkbox column
+                        ImGui.TableSetColumnIndex(0);
+                        bool marked = change.MarkedForCommit;
+                        if (ImGui.Checkbox($"##checkbox_{change.Path}", ref marked))
+                        {
+                            // Handle Shift+Click for range selection
+                            if (ImGui.IsKeyDown(ImGuiKey.LeftShift) && lastSelectedChangeIndex >= 0)
+                            {
+                                int startIndex = Math.Min(lastSelectedChangeIndex, changeIndex);
+                                int endIndex = Math.Max(lastSelectedChangeIndex, changeIndex);
+
+                                for (int i = startIndex; i <= endIndex; i++)
+                                {
+                                    changes[i].MarkedForCommit = marked;
+                                }
+                            }
+                            else
+                            {
+                                change.MarkedForCommit = marked;
+                            }
+
+                            lastSelectedChangeIndex = changeIndex;
+                        }
+
+                        // File path column
+                        ImGui.TableSetColumnIndex(1);
+
+                        // Determine color based on state
+                        uint color = GetColorForState(change.IndexState, change.WorkingTreeState);
+                        ImGui.PushStyleColor(ImGuiCol.Text, color);
+
+                        ImGui.Text(change.Path);
+                        ImGui.PopStyleColor();
+
+                        if (ImGui.IsItemHovered())
+                        {
+                            ImGui.BeginTooltip();
+                            ImGui.EndTooltip();
+                        }
+
+                        changeIndex++;
                     }
 
-                    // File path column
-                    ImGui.TableSetColumnIndex(1);
-
-                    // Determine color based on state
-                    uint color = GetColorForState(change.IndexState, change.WorkingTreeState);
-                    ImGui.PushStyleColor(ImGuiCol.Text, color);
-
-                    ImGui.Text(change.Path);
-                    ImGui.PopStyleColor();
-
-                    // Show state tooltip
-                    if (ImGui.IsItemHovered())
-                    {
-                        ImGui.BeginTooltip();
-                        ImGui.Text($"Index: {change.IndexState}");
-                        ImGui.Text($"Working Tree: {change.WorkingTreeState}");
-                        ImGui.EndTooltip();
-                    }
+                    ImGui.EndTable();
                 }
+                ImGui.EndChild();
+            }
 
-                ImGui.EndTable();
+            // Commit message area
+            ImGui.TextUnformatted("Commit Message:");
+
+            ImGui.InputTextMultiline(
+                "##CommitMessage",
+                ref commitMessage,
+                1024,
+                new System.Numerics.Vector2(-1, 60f),
+                ImGuiInputTextFlags.None
+            );
+
+            // Commit button
+            if (ImGui.Button("Commit", new System.Numerics.Vector2(-1, 0)))
+            {
+                if (!string.IsNullOrWhiteSpace(commitMessage))
+                {
+                    currentRepository?.CommitChanges(commitMessage);
+                    commitMessage = string.Empty;
+                }
             }
 
             ImGui.End();
@@ -90,16 +143,12 @@ namespace GitDesktop.UI
                 return ImGui.GetColorU32(System.Numerics.Vector4.One with { X = 1.0f, Y = 1.0f, Z = 0.0f, W = 1.0f });
 
             // Green for added
-            if (indexState == GitFileState.Added || workingTreeState == GitFileState.Added)
+            if (indexState == GitFileState.Added || workingTreeState == GitFileState.Added || workingTreeState == GitFileState.Untracked)
                 return ImGui.GetColorU32(System.Numerics.Vector4.One with { X = 0.0f, Y = 1.0f, Z = 0.0f, W = 1.0f });
 
             // Red for deleted
             if (indexState == GitFileState.Deleted || workingTreeState == GitFileState.Deleted)
                 return ImGui.GetColorU32(System.Numerics.Vector4.One with { X = 1.0f, Y = 0.0f, Z = 0.0f, W = 1.0f });
-
-            // Cyan for untracked
-            if (workingTreeState == GitFileState.Untracked)
-                return ImGui.GetColorU32(System.Numerics.Vector4.One with { X = 0.0f, Y = 1.0f, Z = 1.0f, W = 1.0f });
 
             // Magenta for conflicted
             if (workingTreeState == GitFileState.Conflicted)
