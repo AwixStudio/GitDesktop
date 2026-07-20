@@ -34,6 +34,7 @@ namespace GitDesktop
 
             repositoryManager = new RepositoryManager();
 
+            Logger.Initialize(ViewManager.CreateLogPopupWindow);
             views = new List<IRender>();
 
             // Configure ViewManager callbacks

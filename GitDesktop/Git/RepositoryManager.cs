@@ -3,21 +3,19 @@ using System.Text.Json.Serialization;
 
 namespace GitDesktop.Git
 {
-    internal class RepositoryManager
+    public class RepositoryManager
     {
-        private const string CONFIG_FILE_NAME = "repositories.json";
         private const string APP_CONFIG_FILE_NAME = "app-config.json";
 
-        private readonly string configPath;
         private readonly string appConfigPath;
         private AppConfig appConfig;
 
-        public List<Repository> Repositories { get; private set; } = [];
+        private List<Repository> repositories = [];
+        public IReadOnlyList<Repository> Repositories => repositories;
         public Repository? CurrentRepository { get; private set; }
 
         public RepositoryManager()
         {
-            configPath = Path.Combine(AppContext.BaseDirectory, CONFIG_FILE_NAME);
             appConfigPath = Path.Combine(AppContext.BaseDirectory, APP_CONFIG_FILE_NAME);
             appConfig = new();
             
@@ -41,7 +39,7 @@ namespace GitDesktop.Git
                 appConfig = new AppConfig();
             }
 
-            Repositories.Clear();
+            repositories.Clear();
             foreach (var path in appConfig.RepositoryPaths)
             {
                 if (Directory.Exists(path))
@@ -49,7 +47,7 @@ namespace GitDesktop.Git
                     try
                     {
                         var repo = new Repository(new DirectoryInfo(path).Name, path);
-                        Repositories.Add(repo);
+                        repositories.Add(repo);
                     }
                     catch (Exception ex)
                     {
@@ -93,7 +91,7 @@ namespace GitDesktop.Git
 
             var repo = new Repository(new DirectoryInfo(path).Name, path);
 
-            Repositories.Add(repo);
+            repositories.Add(repo);
             appConfig.RepositoryPaths.Add(path);
             SetCurrentRepository(repo);
         }
@@ -103,7 +101,7 @@ namespace GitDesktop.Git
             var repo = Repositories.FirstOrDefault(r => r.Path == path);
             if (repo != null)
             {
-                Repositories.Remove(repo);
+                repositories.Remove(repo);
                 appConfig.RepositoryPaths.Remove(path);
 
                 // Clear last used repository if it was the one being removed
@@ -142,12 +140,14 @@ namespace GitDesktop.Git
         public List<string> RepositoryPaths { get; set; } = [];
     }
 
-    internal class Repository
+    public class Repository
     {
         public string Name { get; private set; }
         public string Path { get; private set; }
-        public GitBranch CurrentBranch { get; private set; }        
-        public List<GitBranch> Branches { get; private set; }
+        public GitBranch CurrentBranch { get; private set; }
+
+        private List<GitBranch> branches = [];
+        public IReadOnlyList<GitBranch> Branches => branches;
 
         public Repository(string name, string path)
         {
@@ -156,7 +156,7 @@ namespace GitDesktop.Git
 
             (var branches, var currentBranch) = GitService.GetBranches(path);
             CurrentBranch = currentBranch;
-            Branches = branches;
+            this.branches = branches;
         }
 
         public void ChangeBranch(GitBranch newBranch)
@@ -166,14 +166,22 @@ namespace GitDesktop.Git
                 throw new InvalidOperationException($"Branch {newBranch.Name} does not exist in repository {Name}");
             }
 
-            try
+            GitStatus status = GitService.GetStatus(Path);
+            if (status.IsClean)
             {
-                GitService.CheckoutBranch(Path, newBranch.Name);
-                CurrentBranch = newBranch;
+                try
+                {
+                    GitService.CheckoutBranch(Path, newBranch.Name);
+                    CurrentBranch = newBranch;
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException($"Failed to checkout branch {newBranch.Name}: {ex.Message}");
+                }
             }
-            catch (Exception ex)
+            else
             {
-                throw new InvalidOperationException($"Failed to checkout branch {newBranch.Name}: {ex.Message}");
+                Logger.Log("To switch branch you need first to clear all your current changes by committing, stashing or discarding them.");
             }
         }
     }

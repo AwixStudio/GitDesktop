@@ -4,11 +4,11 @@ using System.Text;
 
 namespace GitDesktop.Git
 {
-    internal class GitBranch
+    public class GitBranch
     {
-        internal string Name { get; private set; }
+        public string Name { get; private set; }
 
-        internal GitBranch(string name)
+        public GitBranch(string name)
         {
             Name = name;
         }
