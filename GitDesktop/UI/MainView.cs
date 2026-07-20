@@ -139,6 +139,28 @@ namespace GitDesktop.UI
             ImGui.Dummy(new Vector2(0, ImGui.GetTextLineHeightWithSpacing())); // miejsce na etykietę
             if (ImGui.Button("Update from main", new Vector2(updateButtonWidth, 0)))
             {
+                if (selectedRepository != null)
+                {
+                    // Create and show progress popup
+                    UpdateProgressPopup progressPopup = new();
+
+                    // Start update on a separate thread
+                    Task.Run(() =>
+                    {
+                        try
+                        {
+                            selectedRepository.UpdateFromMain((status, progress) =>
+                            {
+                                progressPopup.UpdateStatus(status, progress);
+                            });
+                            progressPopup.Complete();
+                        }
+                        catch (Exception ex)
+                        {
+                            progressPopup.Error(ex.Message);
+                        }
+                    });
+                }
             }
             ImGui.EndGroup();
 

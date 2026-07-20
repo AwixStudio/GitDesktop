@@ -283,5 +283,33 @@ namespace GitDesktop.Git
                 Logger.Log($"Failed to commit changes: {ex.Message}");
             }
         }
+
+        public void UpdateFromMain(Action<string, float> onProgress)
+        {
+            try
+            {
+                GitService.UpdateFromMain(Path, onProgress);
+
+                // Refresh status after update
+                onProgress("Refreshing status...", 95);
+                GitStatus status = GitService.GetStatus(Path);
+                RefreshChanges(status.Files);
+
+                try
+                {
+                    commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+                }
+                catch
+                {
+                    commits = [];
+                }
+
+                onProgress("Update completed!", 100);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to update from main: {ex.Message}");
+            }
+        }
     }
 }

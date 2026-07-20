@@ -96,6 +96,30 @@ namespace GitDesktop.Git
             return commits;
         }
 
+        public static void UpdateFromMain(string repositoryPath, Action<string, float> onProgress)
+        {
+            try
+            {
+                // Step 1: Fetch from origin
+                onProgress("Fetching from origin...", 20);
+                Execute(repositoryPath, "fetch origin main");
+
+                // Step 2: Merge main into current branch
+                onProgress("Merging main branch...", 60);
+                Execute(repositoryPath, "merge origin/main --no-edit");
+
+                // Step 3: Pull latest changes
+                onProgress("Pulling latest changes...", 80);
+                Execute(repositoryPath, "pull origin");
+
+                onProgress("Update completed!", 100);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to update from main: {ex.Message}");
+            }
+        }
+
         public static string GetFileDiff(string repositoryPath, string filePath)
         {
             try
