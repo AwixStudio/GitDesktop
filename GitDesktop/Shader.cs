@@ -4,71 +4,71 @@ namespace GitDesktop
 {
     public sealed class Shader : IDisposable
     {
-        private readonly GL _gl;
+        private readonly GL gl;
 
         public uint Handle { get; }
         public int ProjectionMatrixLocation { get; }
         public int TextureLocation { get; }
 
-        public Shader(GL gl, string vertexSource, string fragmentSource)
+        public Shader(GL _gl, string vertexSource, string fragmentSource)
         {
-            _gl = gl;
+            gl = _gl;
 
             // Vertex Shader
-            uint vertexShader = _gl.CreateShader(ShaderType.VertexShader);
-            _gl.ShaderSource(vertexShader, vertexSource);
-            _gl.CompileShader(vertexShader);
+            uint vertexShader = gl.CreateShader(ShaderType.VertexShader);
+            gl.ShaderSource(vertexShader, vertexSource);
+            gl.CompileShader(vertexShader);
 
-            _gl.GetShader(vertexShader, ShaderParameterName.CompileStatus, out int success);
+            gl.GetShader(vertexShader, ShaderParameterName.CompileStatus, out int success);
             if (success == 0)
             {
-                throw new Exception(_gl.GetShaderInfoLog(vertexShader));
+                throw new Exception(gl.GetShaderInfoLog(vertexShader));
             }
 
             // Fragment Shader
-            uint fragmentShader = _gl.CreateShader(ShaderType.FragmentShader);
-            _gl.ShaderSource(fragmentShader, fragmentSource);
-            _gl.CompileShader(fragmentShader);
+            uint fragmentShader = gl.CreateShader(ShaderType.FragmentShader);
+            gl.ShaderSource(fragmentShader, fragmentSource);
+            gl.CompileShader(fragmentShader);
 
-            _gl.GetShader(fragmentShader, ShaderParameterName.CompileStatus, out success);
+            gl.GetShader(fragmentShader, ShaderParameterName.CompileStatus, out success);
             if (success == 0)
             {
-                throw new Exception(_gl.GetShaderInfoLog(fragmentShader));
+                throw new Exception(gl.GetShaderInfoLog(fragmentShader));
             }
 
             // Program
-            Handle = _gl.CreateProgram();
+            Handle = gl.CreateProgram();
 
-            _gl.AttachShader(Handle, vertexShader);
-            _gl.AttachShader(Handle, fragmentShader);
+            gl.AttachShader(Handle, vertexShader);
+            gl.AttachShader(Handle, fragmentShader);
 
-            _gl.LinkProgram(Handle);
+            gl.LinkProgram(Handle);
 
-            ProjectionMatrixLocation = _gl.GetUniformLocation(Handle, "projection_matrix");
-            TextureLocation = _gl.GetUniformLocation(Handle, "Texture");
+            ProjectionMatrixLocation = gl.GetUniformLocation(Handle, "projection_matrix");
+            TextureLocation = gl.GetUniformLocation(Handle, "Texture");
 
-            _gl.GetProgram(Handle, ProgramPropertyARB.LinkStatus, out success);
+            gl.GetProgram(Handle, ProgramPropertyARB.LinkStatus, out success);
             if (success == 0)
             {
-                throw new Exception(_gl.GetProgramInfoLog(Handle));
+                throw new Exception(gl.GetProgramInfoLog(Handle));
             }
 
             // Shadery nie są już potrzebne po linkowaniu
-            _gl.DetachShader(Handle, vertexShader);
-            _gl.DetachShader(Handle, fragmentShader);
+            gl.DetachShader(Handle, vertexShader);
+            gl.DetachShader(Handle, fragmentShader);
 
-            _gl.DeleteShader(vertexShader);
-            _gl.DeleteShader(fragmentShader);
+            gl.DeleteShader(vertexShader);
+            gl.DeleteShader(fragmentShader);
         }
 
         public void Use()
         {
-            _gl.UseProgram(Handle);
+            gl.UseProgram(Handle);
         }
 
         public void Dispose()
         {
-            _gl.DeleteProgram(Handle);
+            gl.DeleteProgram(Handle);
         }
     }
 }

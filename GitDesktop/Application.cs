@@ -1,20 +1,22 @@
-﻿using ImGuiNET;
+﻿using GitDesktop.Git;
+using GitDesktop.UI;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace GitDesktop
 {
     internal class Application
     {
-        private readonly IWindow _window;
-        private GL _gl = null!;
-        private ImGuiController _imGui = null!;
-        private IInputContext _input = null!;
+        private readonly IWindow window;
+        private GL gl = null!;
+        private ImGuiController imGui = null!;
+        private IInputContext input = null!;
+
+        private RepositoryManager repositoryManager;
+
+        private List<IRender> views;
 
         public Application()
         {
@@ -23,73 +25,81 @@ namespace GitDesktop
             options.Title = "GitDesktop";
             options.Size = new Vector2D<int>(1600, 900);
 
-            _window = Window.Create(options);
+            window = Window.Create(options);
 
-            _window.Load += OnLoad;
-            _window.Update += OnUpdate;
-            _window.Render += OnRender;
-            _window.Closing += OnClosing;
+            window.Load += OnLoad;
+            window.Update += OnUpdate;
+            window.Render += OnRender;
+            window.Closing += OnClosing;
+
+            repositoryManager = new RepositoryManager();
+
+            views = new List<IRender>();
+
+            // Configure ViewManager callbacks
+            ViewManager.AddNewView = (view) => views.Add(view);
+            ViewManager.RemoveView = (view) => views.Remove(view);
+
+            views.Add(new MainView(repositoryManager));
         }
 
         public void Run()
         {
-            _window.Run();
+            window.Run();
         }
 
         private void OnLoad()
         {
-            _gl = _window.CreateOpenGL();
-            _gl.ClearColor(0.1f, 0.15f, 0.3f, 1.0f);
+            gl = window.CreateOpenGL();
+            gl.ClearColor(0.1f, 0.15f, 0.3f, 1.0f);
 
-            _gl.Enable(GLEnum.Blend); 
+            gl.Enable(GLEnum.Blend); 
 
-            _gl.BlendEquation(GLEnum.FuncAdd);
+            gl.BlendEquation(GLEnum.FuncAdd);
 
-            _gl.BlendFunc(
+            gl.BlendFunc(
                 BlendingFactor.SrcAlpha,
                 BlendingFactor.OneMinusSrcAlpha);
 
-            _gl.Disable(GLEnum.CullFace);
-            _gl.Disable(GLEnum.DepthTest);
-            _gl.Disable(GLEnum.StencilTest);
+            gl.Disable(GLEnum.CullFace);
+            gl.Disable(GLEnum.DepthTest);
+            gl.Disable(GLEnum.StencilTest);
 
-            _input = _window.CreateInput();
-            _imGui = new ImGuiController(_window, _gl, _input);
+            input = window.CreateInput();
+            imGui = new ImGuiController(window, gl, input);
         }
 
         private void OnUpdate(double deltaTime)
         {
-
+            imGui.PrepareForRender(deltaTime);
+            ProcessUI();
         }
 
         private void OnRender(double deltaTime)
         {
-            _gl.Viewport(
+            gl.Viewport(
                 0,
                 0,
-                (uint)_window.FramebufferSize.X,
-                (uint)_window.FramebufferSize.Y);
-            _gl.Clear(ClearBufferMask.ColorBufferBit);
+                (uint)window.FramebufferSize.X,
+                (uint)window.FramebufferSize.Y);
+            gl.Clear(ClearBufferMask.ColorBufferBit);
 
-            _imGui.Update(deltaTime);
-            DrawUI();
-            _imGui.Render();
+            imGui.Render();
         }
 
-        private void DrawUI()
+        private void ProcessUI()
         {
-            ImGui.Begin("Hello");
-            ImGui.Text("Hello GitDesktop!");
-            if (ImGui.Button("Click me"))
+            // iterate over a copy of the views list to avoid modification during iteration
+            var viewsCopy = new List<IRender>(views);
+            foreach (var view in viewsCopy)
             {
-                Console.WriteLine("Button clicked!");
+                view.Render();
             }
-            ImGui.End();
         }
 
         private void OnClosing()
         {
-            _imGui.Dispose();
+            imGui.Dispose();
         }
     }
 }
