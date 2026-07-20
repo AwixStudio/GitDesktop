@@ -96,6 +96,34 @@ namespace GitDesktop.Git
             return commits;
         }
 
+        public static string GetFileDiff(string repositoryPath, string filePath)
+        {
+            try
+            {
+                // For untracked files, show the content instead of diff
+                string gitDiffCmd = $"diff HEAD -- \"{filePath}\"";
+                string gitDiffResult = Execute(repositoryPath, gitDiffCmd);
+
+                // Limit diff to first 30 lines
+                var lines = gitDiffResult.Split('\n');
+                int maxLines = Math.Min(30, lines.Length);
+                return string.Join("\n", lines.Take(maxLines));
+            }
+            catch
+            {
+                // If diff fails, try to show file content for untracked files
+                try
+                {
+                    string showCmd = $"show :{filePath}";
+                    return Execute(repositoryPath, showCmd);
+                }
+                catch
+                {
+                    return "Unable to load diff";
+                }
+            }
+        }
+
         private static string Execute(string repositoryPath, string arguments)
         {
             Process process = new();

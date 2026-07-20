@@ -11,6 +11,7 @@ namespace GitDesktop.UI
         private readonly RepositoryManager repositoryManager;
         private string commitMessage = string.Empty;
         private int lastSelectedChangeIndex = -1;
+        private string lastHoveredFilePath = string.Empty;
 
         public ChangesView(RepositoryManager repositoryManager)
         {
@@ -100,7 +101,24 @@ namespace GitDesktop.UI
 
                         if (ImGui.IsItemHovered())
                         {
+                            lastHoveredFilePath = change.Path;
+
+                            // Lazy load diff on hover
+                            if (!change.IsDiffLoaded)
+                            {
+                                try
+                                {
+                                    string diff = GitService.GetFileDiff(currentRepository.Path, change.Path);
+                                    change.SetCachedDiff(diff);
+                                }
+                                catch
+                                {
+                                    change.SetCachedDiff("Error loading diff");
+                                }
+                            }
+
                             ImGui.BeginTooltip();
+                            ImGui.Text(change.GetCachedDiff());
                             ImGui.EndTooltip();
                         }
 

@@ -2,11 +2,11 @@ namespace GitDesktop.Git
 {
     public class GitCommit
     {
-        public string Hash { get; set; }
-        public string Author { get; set; }
-        public DateTime Date { get; set; }
-        public string Message { get; set; }
-        public string ParentHash { get; set; }
+        public string Hash { get; private set; }
+        public string Author { get; private set; }
+        public DateTime Date { get; private set; }
+        public string Message { get; private set; }
+        public string ParentHash { get; private set; }
 
         public GitCommit(string hash, string author, DateTime date, string message, string parentHash = "")
         {
