@@ -9,6 +9,7 @@ namespace GitDesktop.UI
         private readonly RepositoryManager repositoryManager;
         private readonly AddExistingRepositoryDialog addExistingRepositoryDialog;
         private readonly CreateBranchDialogHelper createBranchDialogHelper;
+        private readonly SearchableComboHelper branchComboHelper;
 
         private readonly MenuItem repositoryMenu_addExisting;
         private readonly MenuItem repositoryMenu_clone;
@@ -30,6 +31,7 @@ namespace GitDesktop.UI
 
             addExistingRepositoryDialog = new AddExistingRepositoryDialog(repositoryManager);
             createBranchDialogHelper = new CreateBranchDialogHelper(repositoryManager);
+            branchComboHelper = new SearchableComboHelper();
 
             repositoryMenu_addExisting = new("Add existing repository", () => addExistingRepositoryDialog.Open());
             repositoryMenu_clone = new("Clone repository", () => { });
@@ -130,7 +132,26 @@ namespace GitDesktop.UI
             ImGui.TextUnformatted("Branch");
             ImGui.SetNextItemWidth(branchWidth);
             int previousSelectedBranch = selectedBranchIndex;
-            ImGui.Combo("##Branch", ref selectedBranchIndex, branchesNames, branchesNames.Length);
+
+            // Use searchable combo instead of standard combo
+            if (branchComboHelper.BeginCombo("##Branch", selectedBranch?.Name ?? "No branch", "##BranchCombo"))
+            {
+                branchComboHelper.SearchInput();
+                ImGui.Separator();
+
+                int newSelectedIndex = branchComboHelper.SelectableList(branchesNames, selectedBranchIndex);
+                if (newSelectedIndex >= 0)
+                {
+                    selectedBranchIndex = newSelectedIndex;
+                    branchComboHelper.EndCombo();
+                    branchComboHelper.Reset();
+                }
+                else
+                {
+                    branchComboHelper.EndCombo();
+                }
+            }
+
             ImGui.EndGroup();
 
             if(previousSelectedBranch != selectedBranchIndex)
