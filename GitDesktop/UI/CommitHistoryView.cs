@@ -10,10 +10,12 @@ namespace GitDesktop.UI
         private readonly RepositoryManager repositoryManager;
         private int selectedCommitIndex = -1;
         private string selectedCommitDetails = string.Empty;
+        private CommitContextMenuHelper contextMenuHelper;
 
         public CommitHistoryView(RepositoryManager repositoryManager)
         {
             this.repositoryManager = repositoryManager;
+            this.contextMenuHelper = new CommitContextMenuHelper(repositoryManager);
         }
 
         public void Render()
@@ -75,6 +77,22 @@ namespace GitDesktop.UI
                             selectedCommitIndex = commitIndex;
                             UpdateSelectedCommitDetails(commit);
                         }
+
+                        if (ImGui.BeginPopupContextItem("##CommitContextMenu"))
+                        {
+                            if (ImGui.MenuItem("Create branch from this commit"))
+                            {
+                                contextMenuHelper.ShowCreateBranchDialog(commit.Hash);
+                            }
+
+                            if (ImGui.MenuItem("Cherry-pick"))
+                            {
+                                contextMenuHelper.PerformCherryPickPublic(commit.Hash);
+                            }
+
+                            ImGui.EndPopup();
+                        }
+
                         ImGui.PopID();
 
                         // Author column
@@ -90,13 +108,6 @@ namespace GitDesktop.UI
                         string message = commit.Message.Length > 50 ? commit.Message.Substring(0, 50) + "..." : commit.Message;
                         ImGui.TextUnformatted(message);
 
-                        if (ImGui.IsItemHovered())
-                        {
-                            ImGui.BeginTooltip();
-                            ImGui.TextUnformatted(commit.Message);
-                            ImGui.EndTooltip();
-                        }
-
                         commitIndex++;
                     }
 
@@ -104,6 +115,8 @@ namespace GitDesktop.UI
                 }
                 ImGui.EndChild();
             }
+
+            contextMenuHelper.RenderCreateBranchDialog();
 
             ImGui.End();
         }

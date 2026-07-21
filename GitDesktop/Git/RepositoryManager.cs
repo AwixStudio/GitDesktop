@@ -325,7 +325,7 @@ namespace GitDesktop.Git
         {
             try
             {
-                await GitService.UpdateFromMain(Path, message => onProgress(message, 0));
+                await GitService.UpdateFromMain(Path, onProgress);
 
                 // Refresh status after update
                 onProgress("Refreshing file status...", 97);

@@ -8,6 +8,7 @@ namespace GitDesktop.UI
     {
         private readonly RepositoryManager repositoryManager;
         private readonly AddExistingRepositoryDialog addExistingRepositoryDialog;
+        private readonly CreateBranchDialogHelper createBranchDialogHelper;
 
         private readonly MenuItem repositoryMenu_addExisting;
         private readonly MenuItem repositoryMenu_clone;
@@ -28,6 +29,7 @@ namespace GitDesktop.UI
             repositoryManager = _repositoryManager;
 
             addExistingRepositoryDialog = new AddExistingRepositoryDialog(repositoryManager);
+            createBranchDialogHelper = new CreateBranchDialogHelper(repositoryManager);
 
             repositoryMenu_addExisting = new("Add existing repository", () => addExistingRepositoryDialog.Open());
             repositoryMenu_clone = new("Clone repository", () => { });
@@ -42,7 +44,7 @@ namespace GitDesktop.UI
                 repositoryMenu_gitCmd
             ]);
 
-            branchMenu_createNew = new("Create new branch", () => { });
+            branchMenu_createNew = new("Create new branch", () => createBranchDialogHelper.Open());
             branchMenu_resetHard = new("Hard reset", () => repositoryManager.CurrentRepository?.HardReset());
 
             branchMenu = new("Branch",

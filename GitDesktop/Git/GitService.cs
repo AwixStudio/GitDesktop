@@ -101,31 +101,29 @@ namespace GitDesktop.Git
             return commits;
         }
 
-        public static async Task UpdateFromMain(string repositoryPath, Action<string> onMessage)
+        public static async Task UpdateFromMain(string repositoryPath, Action<string, float> onProgress)
         {
-            onMessage("Fetching...");
+            onProgress("Fetching...", 5);
 
             int exit = await ExecuteAsync(
                 repositoryPath,
                 "fetch origin",
-                onOutput: onMessage,
-                onError: onMessage);
+                onOutput: (message) => onProgress(message, 5));
 
             if (exit != 0)
                 throw new Exception("Fetch failed.");
 
-            onMessage("Merging...");
+            onProgress("Merging...", 20);
 
             exit = await ExecuteAsync(
                 repositoryPath,
                 "merge origin/main",
-                onOutput: onMessage,
-                onError: onMessage);
+                onOutput: (message) => onProgress(message, 20));
 
             if (exit != 0)
                 throw new Exception("Merge failed.");
 
-            onMessage("Done.");
+            onProgress("Merging done.", 95);
         }
 
         public static string GetFileDiff(string repositoryPath, string filePath)
@@ -190,6 +188,7 @@ namespace GitDesktop.Git
 
             process.StartInfo.FileName = "git";
             process.StartInfo.Arguments = arguments;
+            process.StartInfo.Environment["GIT_TRACE2_EVENT"] = "-";
             process.StartInfo.WorkingDirectory = repositoryPath;
 
             process.StartInfo.UseShellExecute = false;
@@ -212,7 +211,10 @@ namespace GitDesktop.Git
             process.ErrorDataReceived += (_, e) =>
             {
                 if (!string.IsNullOrWhiteSpace(e.Data))
+                {
                     onError?.Invoke(e.Data);
+                    Console.WriteLine("Error: " + e.Data);
+                }
             };
 
             process.Start();
@@ -224,5 +226,62 @@ namespace GitDesktop.Git
 
             return process.ExitCode;
         }
+            /// <summary>
+            /// Create a new branch from a specific commit
+            /// </summary>
+            public static void CreateBranch(string repositoryPath, string branchName, string commitHash)
+            {
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "git",
+                        Arguments = $"branch {branchName} {commitHash}",
+                        WorkingDirectory = repositoryPath,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                process.Start();
+                process.WaitForExit();
+
+                if (process.ExitCode != 0)
+                {
+                    string error = process.StandardError.ReadToEnd();
+                    throw new Exception($"Git branch failed: {error}");
+                }
+            }
+
+            /// <summary>
+            /// Perform cherry-pick operation
+            /// </summary>
+            public static void CherryPick(string repositoryPath, string commitHash)
+            {
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "git",
+                        Arguments = $"cherry-pick {commitHash}",
+                        WorkingDirectory = repositoryPath,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                process.Start();
+                process.WaitForExit();
+
+                if (process.ExitCode != 0)
+                {
+                    string error = process.StandardError.ReadToEnd();
+                    throw new Exception($"Git cherry-pick failed: {error}");
+                }
+            }
+        }
     }
-}
