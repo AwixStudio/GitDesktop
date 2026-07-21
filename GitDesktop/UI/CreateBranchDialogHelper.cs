@@ -116,8 +116,8 @@ namespace GitDesktop.UI
                 branchNameInput = "";
                 Close();
 
-                // Refresh changes to update the UI (which includes branches)
-                repositoryManager.RefreshChanges();
+                // Refresh branches list to show the newly created branch
+                repositoryManager.CurrentRepository?.RefreshBranches();
             }
             catch (Exception ex)
             {

@@ -344,10 +344,30 @@ namespace GitDesktop.Git
                 }
 
                 onProgress("Update completed!", 100);
+
+                // Refresh branches after update (new branches might have been fetched)
+                RefreshBranches();
             }
             catch (Exception ex)
             {
                 throw new InvalidOperationException($"Failed to update from main: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Refresh the list of branches from the repository
+        /// </summary>
+        public void RefreshBranches()
+        {
+            try
+            {
+                (var updatedBranches, var updatedCurrentBranch) = GitService.GetBranches(Path);
+                branches = updatedBranches;
+                CurrentBranch = updatedCurrentBranch;
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Failed to refresh branches: {ex.Message}");
             }
         }
 

@@ -33,7 +33,8 @@ namespace GitDesktop.Git
 
         public static (List<GitBranch>, GitBranch) GetBranches(string repositoryPath)
         {
-            string gitBranchCmdResult = Execute(repositoryPath, "branch --list");
+            // Get all branches (local and remote with -a flag)
+            string gitBranchCmdResult = Execute(repositoryPath, "branch -a");
             List<GitBranch> branches = [];
             GitBranch currentBranch = new("main");            
 
@@ -42,11 +43,24 @@ namespace GitDesktop.Git
                 string branchName = line.TrimStart('*', ' ').Trim();
                 bool isCurrent = line.StartsWith("*");
 
+                // Skip remote HEAD pointers (e.g., "origin/HEAD -> origin/main")
+                if (branchName.Contains("->"))
+                    continue;
+
+                // Remove "remotes/" prefix from remote branches for easier display
+                if (branchName.StartsWith("remotes/"))
+                {
+                    branchName = branchName.Substring("remotes/".Length);
+                }
+
                 GitBranch branch = new(branchName);
 
                 if (isCurrent)                
                     currentBranch = branch;
-                branches.Add(branch);                
+
+                // Avoid duplicates (local branch + remote branch with same name)
+                if (!branches.Any(b => b.Name == branchName))
+                    branches.Add(branch);                
             }
 
             return (branches, currentBranch);
@@ -118,7 +132,25 @@ namespace GitDesktop.Git
             exit = await ExecuteAsync(
                 repositoryPath,
                 "merge origin/main",
-                onOutput: (message) => onProgress(message, 20));
+                onOutput: (message) => 
+                {
+                    if (message.Contains('%'))
+                    {
+                        var match = System.Text.RegularExpressions.Regex.Match(
+                            message,
+                            @"^(.*?)(\d+)%(.+)?$");
+
+                        if (match.Success && float.TryParse(match.Groups[2].Value, out float percent))
+                        {
+                            string before = match.Groups[1].Value.TrimEnd();
+                            string after = match.Groups[3].Value.Trim();
+
+                            onProgress(
+                                $"{before} {percent}%% {after}",
+                                20 + percent * 0.74f);
+                        }
+                    }
+                });
 
             if (exit != 0)
                 throw new Exception("Merge failed.");
@@ -201,7 +233,7 @@ namespace GitDesktop.Git
 
             process.OutputDataReceived += (_, e) =>
             {
-                if (!string.IsNullOrWhiteSpace(e.Data))
+                if (!string.IsNullOrWhiteSpace(e.Data) && !e.Data.Contains("warning", StringComparison.OrdinalIgnoreCase))
                 {
                     onOutput?.Invoke(e.Data);
                     Console.WriteLine(e.Data);
@@ -210,10 +242,10 @@ namespace GitDesktop.Git
 
             process.ErrorDataReceived += (_, e) =>
             {
-                if (!string.IsNullOrWhiteSpace(e.Data))
+                if (!string.IsNullOrWhiteSpace(e.Data) && !e.Data.Contains("warning", StringComparison.OrdinalIgnoreCase))
                 {
-                    onError?.Invoke(e.Data);
-                    Console.WriteLine("Error: " + e.Data);
+                    onOutput?.Invoke(e.Data);
+                    Console.WriteLine(e.Data);
                 }
             };
 

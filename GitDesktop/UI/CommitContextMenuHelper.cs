@@ -89,6 +89,9 @@ namespace GitDesktop.UI
                     Logger.Log($"Branch '{branchNameInput}' created based on {selectedCommitHash}");
                     showCreateBranchDialog = false;
                     branchNameInput = "";
+
+                    // Refresh branches to show the newly created branch
+                    repositoryManager.CurrentRepository?.RefreshBranches();
                 }
                 catch (Exception ex)
                 {
