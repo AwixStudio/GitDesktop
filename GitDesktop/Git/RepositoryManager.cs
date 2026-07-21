@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -284,17 +285,55 @@ namespace GitDesktop.Git
             }
         }
 
-        public void UpdateFromMain(Action<string, float> onProgress)
+        public void DiscardChanges()
         {
             try
             {
-                GitService.UpdateFromMain(Path, onProgress);
+                GitService.DiscardChanges(Path, changes);
+                GitStatus status = GitService.GetStatus(Path);
+                RefreshChanges(status.Files);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Failed to discard changes: {ex.Message}");
+            }
+        }
+
+        public void HardReset()
+        {
+            try
+            {
+                GitService.HardReset(Path);
+                GitStatus status = GitService.GetStatus(Path);
+                RefreshChanges(status.Files);
+                try
+                {
+                    commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+                }
+                catch
+                {
+                    commits = [];
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Failed to reset hard: {ex.Message}");
+            }
+        }
+
+        public async Task UpdateFromMain(Action<string, float> onProgress)
+        {
+            try
+            {
+                await GitService.UpdateFromMain(Path, message => onProgress(message, 0));
 
                 // Refresh status after update
-                onProgress("Refreshing status...", 95);
+                onProgress("Refreshing file status...", 97);
                 GitStatus status = GitService.GetStatus(Path);
                 RefreshChanges(status.Files);
 
+                // Refresh commits
+                onProgress("Refreshing commit history...", 99);
                 try
                 {
                     commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
@@ -310,6 +349,16 @@ namespace GitDesktop.Git
             {
                 throw new InvalidOperationException($"Failed to update from main: {ex.Message}");
             }
+        }
+
+        public void OpenInGitCmd()
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                WorkingDirectory = Path,
+                UseShellExecute = true
+            });
         }
     }
 }

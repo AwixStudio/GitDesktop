@@ -12,9 +12,11 @@ namespace GitDesktop.UI
         private readonly MenuItem repositoryMenu_addExisting;
         private readonly MenuItem repositoryMenu_clone;
         private readonly MenuItem repositoryMenu_createNew;
+        private readonly MenuItem repositoryMenu_gitCmd;
         private readonly Menu repositoryMenu;
 
         private readonly MenuItem branchMenu_createNew;
+        private readonly MenuItem branchMenu_resetHard;
         private readonly Menu branchMenu;
 
         private readonly MenuItem settingsMenu_credits;
@@ -30,19 +32,23 @@ namespace GitDesktop.UI
             repositoryMenu_addExisting = new("Add existing repository", () => addExistingRepositoryDialog.Open());
             repositoryMenu_clone = new("Clone repository", () => { });
             repositoryMenu_createNew = new("Create new repository", () => { });
+            repositoryMenu_gitCmd = new("Open in cmd", () => repositoryManager.CurrentRepository?.OpenInGitCmd());
 
             repositoryMenu = new("Repository",
             [
                 repositoryMenu_addExisting,
                 repositoryMenu_clone,
-                repositoryMenu_createNew
+                repositoryMenu_createNew,
+                repositoryMenu_gitCmd
             ]);
 
             branchMenu_createNew = new("Create new branch", () => { });
+            branchMenu_resetHard = new("Hard reset", () => repositoryManager.CurrentRepository?.HardReset());
 
             branchMenu = new("Branch",
             [
-                branchMenu_createNew
+                branchMenu_createNew,
+                branchMenu_resetHard
             ]);
 
             settingsMenu_credits = new("Credits", () => { });
@@ -145,11 +151,11 @@ namespace GitDesktop.UI
                     UpdateProgressPopup progressPopup = new();
 
                     // Start update on a separate thread
-                    Task.Run(() =>
+                    Task.Run(async () =>
                     {
                         try
                         {
-                            selectedRepository.UpdateFromMain((status, progress) =>
+                            await selectedRepository.UpdateFromMain((status, progress) =>
                             {
                                 progressPopup.UpdateStatus(status, progress);
                             });

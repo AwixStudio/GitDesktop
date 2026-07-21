@@ -2,6 +2,7 @@
 using ImGuiNET;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using System.Text;
 
 namespace GitDesktop.UI
@@ -61,7 +62,8 @@ namespace GitDesktop.UI
                     ImGui.TableHeadersRow();
 
                     int changeIndex = 0;
-                    foreach (var change in changes)
+                    var changesCopy = new List<GitFile>(changes);
+                    foreach (var change in changesCopy)
                     {
                         ImGui.TableNextRow();
 
@@ -141,14 +143,23 @@ namespace GitDesktop.UI
                 ImGuiInputTextFlags.None
             );
 
-            // Commit button
-            if (ImGui.Button("Commit", new System.Numerics.Vector2(-1, 0)))
+            float width = ImGui.GetContentRegionAvail().X;
+            float buttonWidth = (width - ImGui.GetStyle().ItemSpacing.X) * 0.5f;
+
+            if (ImGui.Button("Commit", new Vector2(buttonWidth, 0)))
             {
                 if (!string.IsNullOrWhiteSpace(commitMessage))
                 {
                     currentRepository?.CommitChanges(commitMessage);
                     commitMessage = string.Empty;
                 }
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.Button("Discard", new Vector2(buttonWidth, 0)))
+            {
+                currentRepository?.DiscardChanges();
             }
 
             ImGui.End();

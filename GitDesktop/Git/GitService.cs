@@ -70,6 +70,11 @@ namespace GitDesktop.Git
             Execute(repositoryPath, "push");
         }
 
+        public static void HardReset(string repositoryPath)
+        {
+            Execute(repositoryPath, "reset --hard HEAD");
+        }
+
         public static List<GitCommit> GetCommitLog(string repositoryPath, string branchName, int limit = 100)
         {
             string gitLogCmd = $"log {branchName} --pretty=format:\"%H|%an|%ai|%s|%P\" --max-count={limit}";
@@ -96,28 +101,31 @@ namespace GitDesktop.Git
             return commits;
         }
 
-        public static void UpdateFromMain(string repositoryPath, Action<string, float> onProgress)
+        public static async Task UpdateFromMain(string repositoryPath, Action<string> onMessage)
         {
-            try
-            {
-                // Step 1: Fetch from origin
-                onProgress("Fetching from origin...", 20);
-                Execute(repositoryPath, "fetch origin main");
+            onMessage("Fetching...");
 
-                // Step 2: Merge main into current branch
-                onProgress("Merging main branch...", 60);
-                Execute(repositoryPath, "merge origin/main --no-edit");
+            int exit = await ExecuteAsync(
+                repositoryPath,
+                "fetch origin",
+                onOutput: onMessage,
+                onError: onMessage);
 
-                // Step 3: Pull latest changes
-                onProgress("Pulling latest changes...", 80);
-                Execute(repositoryPath, "pull origin");
+            if (exit != 0)
+                throw new Exception("Fetch failed.");
 
-                onProgress("Update completed!", 100);
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"Failed to update from main: {ex.Message}");
-            }
+            onMessage("Merging...");
+
+            exit = await ExecuteAsync(
+                repositoryPath,
+                "merge origin/main",
+                onOutput: onMessage,
+                onError: onMessage);
+
+            if (exit != 0)
+                throw new Exception("Merge failed.");
+
+            onMessage("Done.");
         }
 
         public static string GetFileDiff(string repositoryPath, string filePath)
@@ -148,6 +156,15 @@ namespace GitDesktop.Git
             }
         }
 
+        public static void DiscardChanges(string repositoryPath, List<GitFile> files)
+        {
+            var selectedFiles = files
+                .Where(f => f.MarkedForCommit)
+                .Select(f => $"\"{f.Path}\"");
+            string arguments = "checkout -- " + string.Join(' ', selectedFiles);
+            Execute(repositoryPath, arguments);
+        }
+
         private static string Execute(string repositoryPath, string arguments)
         {
             Process process = new();
@@ -165,6 +182,47 @@ namespace GitDesktop.Git
                 throw new InvalidOperationException($"Git command failed with exit code {process.ExitCode}");
 
             return output;
+        }
+
+        private static async Task<int> ExecuteAsync(string repositoryPath, string arguments, Action<string>? onOutput = null, Action<string>? onError = null)
+        {
+            using Process process = new();
+
+            process.StartInfo.FileName = "git";
+            process.StartInfo.Arguments = arguments;
+            process.StartInfo.WorkingDirectory = repositoryPath;
+
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.CreateNoWindow = true;
+
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.RedirectStandardError = true;
+
+            process.EnableRaisingEvents = true;
+
+            process.OutputDataReceived += (_, e) =>
+            {
+                if (!string.IsNullOrWhiteSpace(e.Data))
+                {
+                    onOutput?.Invoke(e.Data);
+                    Console.WriteLine(e.Data);
+                }
+            };
+
+            process.ErrorDataReceived += (_, e) =>
+            {
+                if (!string.IsNullOrWhiteSpace(e.Data))
+                    onError?.Invoke(e.Data);
+            };
+
+            process.Start();
+
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            await process.WaitForExitAsync();
+
+            return process.ExitCode;
         }
     }
 }
