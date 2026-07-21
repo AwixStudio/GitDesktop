@@ -155,6 +155,7 @@ namespace GitDesktop.Git
         public string Name { get; private set; }
         public string Path { get; private set; }
         public GitBranch CurrentBranch { get; private set; }
+        internal IRepositoryProvider Provider { get; private set; }
 
         private List<GitBranch> branches = [];
         public IReadOnlyList<GitBranch> Branches => branches;
@@ -185,6 +186,8 @@ namespace GitDesktop.Git
             {
                 commits = [];
             }
+
+            Provider = GitService.GetProvider(path);
         }
 
         public void ChangeBranch(GitBranch newBranch)
@@ -379,6 +382,11 @@ namespace GitDesktop.Git
                 WorkingDirectory = Path,
                 UseShellExecute = true
             });
+        }
+
+        public void CreatePullRequest()
+        {
+            Provider.CreatePullRequest(Path, "Title", CurrentBranch.Name, "main");            
         }
     }
 }

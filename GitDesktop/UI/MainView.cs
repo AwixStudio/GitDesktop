@@ -55,7 +55,7 @@ namespace GitDesktop.UI
                 branchMenu_resetHard
             ]);
 
-            settingsMenu_credits = new("Credits", () => { });
+            settingsMenu_credits = new("Options", () => new SettingsView());
             settingsMenu_about = new("About", () => new AboutView());
             settingsMenu = new("Settings",
             [
@@ -200,6 +200,7 @@ namespace GitDesktop.UI
             ImGui.Dummy(new Vector2(0, ImGui.GetTextLineHeightWithSpacing())); // miejsce na etykietę
             if (ImGui.Button("Create Pull Request", new Vector2(prButtonWidth, 0)))
             {
+                repositoryManager.CurrentRepository?.CreatePullRequest();
             }
             ImGui.EndGroup();
 

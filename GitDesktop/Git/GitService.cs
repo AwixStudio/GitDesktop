@@ -1,4 +1,5 @@
-﻿using System;
+﻿using GitDesktop.Git.Providers;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
@@ -314,6 +315,51 @@ namespace GitDesktop.Git
                     string error = process.StandardError.ReadToEnd();
                     throw new Exception($"Git cherry-pick failed: {error}");
                 }
+            }
+
+            public static IRepositoryProvider GetProvider(string repositoryPath)
+            {
+                string remote = Execute(repositoryPath, "remote get-url origin");
+
+                switch (remote)
+                {
+                    case string url when url.Contains("github.com"):
+                        var (owner, repository) = ParseRepositoryUrl(remote);
+                        return new Provider_Github(repository, owner);
+                    case string url when url.Contains("gitlab.com"):
+                        return new Provider_Gitlab();
+                    default:
+                        throw new NotSupportedException("Unsupported remote provider.");
+                }
+            }
+
+            private static (string Owner, string Repository) ParseRepositoryUrl(string url)
+            {
+                // Remove trailing ".git"
+                if (url.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+                    url = url[..^4];
+
+                // HTTPS
+                if (Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
+                {
+                    string[] parts = uri.AbsolutePath.Trim('/').Split('/');
+
+                    if (parts.Length >= 2)
+                        return (parts[0], parts[1]);
+                }
+
+                // SSH: git@github.com:owner/repository
+                int colon = url.IndexOf(':');
+                if (colon >= 0)
+                {
+                    string path = url[(colon + 1)..];
+                    string[] parts = path.Split('/');
+
+                    if (parts.Length >= 2)
+                        return (parts[0], parts[1]);
+                }
+
+                throw new ArgumentException("Invalid Git repository URL.", nameof(url));
             }
         }
     }
