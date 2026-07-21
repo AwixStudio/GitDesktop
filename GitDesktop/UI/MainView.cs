@@ -56,7 +56,7 @@ namespace GitDesktop.UI
             ]);
 
             settingsMenu_credits = new("Credits", () => { });
-            settingsMenu_about = new("About", () => { });
+            settingsMenu_about = new("About", () => new AboutView());
             settingsMenu = new("Settings",
             [
                 settingsMenu_credits,
