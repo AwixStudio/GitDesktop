@@ -27,6 +27,7 @@ namespace GitDesktop.UI
             //    CredentialManager.StoreCredentials(CredentialManager.RetrieveCredentials().username, password);
             //}
 
+
             ImGui.End();
 
             if (!isOpen)
