@@ -386,7 +386,7 @@ namespace GitDesktop.Git
 
         public void CreatePullRequest()
         {
-            Provider.CreatePullRequest(Path, "Title", CurrentBranch.Name, "main");            
+            Provider.CreatePullRequest(Path, "Title", CurrentBranch.Name, "master");            
         }
     }
 }

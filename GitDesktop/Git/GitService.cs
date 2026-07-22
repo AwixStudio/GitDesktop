@@ -335,9 +335,7 @@ namespace GitDesktop.Git
 
             private static (string Owner, string Repository) ParseRepositoryUrl(string url)
             {
-                // Remove trailing ".git"
-                if (url.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
-                    url = url[..^4];
+                url = url.Replace(".git", "", StringComparison.OrdinalIgnoreCase);
 
                 // HTTPS
                 if (Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
@@ -358,6 +356,7 @@ namespace GitDesktop.Git
                     if (parts.Length >= 2)
                         return (parts[0], parts[1]);
                 }
+
 
                 throw new ArgumentException("Invalid Git repository URL.", nameof(url));
             }
