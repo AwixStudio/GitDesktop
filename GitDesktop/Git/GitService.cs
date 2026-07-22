@@ -90,6 +90,13 @@ namespace GitDesktop.Git
             Execute(repositoryPath, "reset --hard HEAD");
         }
 
+        public static string GetDefaultBranchName(string repositoryPath)
+        {
+            string gitDefaultBranchCmdResult = Execute(repositoryPath, "symbolic-ref refs/remotes/origin/HEAD");
+            string defaultBranch = gitDefaultBranchCmdResult.Trim().Split('/').Last();
+            return defaultBranch;
+        }
+
         public static List<GitCommit> GetCommitLog(string repositoryPath, string branchName, int limit = 100)
         {
             string gitLogCmd = $"log {branchName} --pretty=format:\"%H|%an|%ai|%s|%P\" --max-count={limit}";
@@ -132,7 +139,7 @@ namespace GitDesktop.Git
 
             exit = await ExecuteAsync(
                 repositoryPath,
-                "merge origin/main",
+                "merge origin/" + GetDefaultBranchName(repositoryPath),
                 onOutput: (message) => 
                 {
                     if (message.Contains('%'))

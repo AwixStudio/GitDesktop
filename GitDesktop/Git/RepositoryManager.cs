@@ -154,6 +154,7 @@ namespace GitDesktop.Git
     {
         public string Name { get; private set; }
         public string Path { get; private set; }
+        public string DefaultBranchName { get; private set; }
         public GitBranch CurrentBranch { get; private set; }
         internal IRepositoryProvider Provider { get; private set; }
 
@@ -170,6 +171,7 @@ namespace GitDesktop.Git
         {
             Name = name;
             Path = path;
+            DefaultBranchName = GitService.GetDefaultBranchName(path);
 
             (var branches, var currentBranch) = GitService.GetBranches(path);
             CurrentBranch = currentBranch;
@@ -187,7 +189,7 @@ namespace GitDesktop.Git
                 commits = [];
             }
 
-            Provider = GitService.GetProvider(path);
+            Provider = GitService.GetProvider(path);            
         }
 
         public void ChangeBranch(GitBranch newBranch)

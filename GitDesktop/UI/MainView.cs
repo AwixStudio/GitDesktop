@@ -163,48 +163,51 @@ namespace GitDesktop.UI
 
             ImGui.SameLine(0, 20);
 
-            // Update button
-            ImGui.BeginGroup();
-            ImGui.Dummy(new Vector2(0, ImGui.GetTextLineHeightWithSpacing())); // miejsce na etykietę
-            if (ImGui.Button("Update from main", new Vector2(updateButtonWidth, 0)))
+            if (repositoryManager.CurrentRepository != null)
             {
-                if (selectedRepository != null)
+                // Update button
+                ImGui.BeginGroup();
+                ImGui.Dummy(new Vector2(0, ImGui.GetTextLineHeightWithSpacing())); // miejsce na etykietę
+                if (ImGui.Button("Update from " + repositoryManager.CurrentRepository?.DefaultBranchName, new Vector2(updateButtonWidth, 0)))
                 {
-                    // Create and show progress popup
-                    UpdateProgressPopup progressPopup = new();
-
-                    // Start update on a separate thread
-                    Task.Run(async () =>
+                    if (selectedRepository != null)
                     {
-                        try
+                        // Create and show progress popup
+                        UpdateProgressPopup progressPopup = new();
+
+                        // Start update on a separate thread
+                        Task.Run(async () =>
                         {
-                            await selectedRepository.UpdateFromMain((status, progress) =>
+                            try
                             {
-                                progressPopup.UpdateStatus(status, progress);
-                            });
-                            progressPopup.Complete();
-                        }
-                        catch (Exception ex)
-                        {
-                            progressPopup.Error(ex.Message);
-                        }
-                    });
+                                await selectedRepository.UpdateFromMain((status, progress) =>
+                                {
+                                    progressPopup.UpdateStatus(status, progress);
+                                });
+                                progressPopup.Complete();
+                            }
+                            catch (Exception ex)
+                            {
+                                progressPopup.Error(ex.Message);
+                            }
+                        });
+                    }
                 }
+                ImGui.EndGroup();
+
+                ImGui.SameLine();
+
+                // Pull Request button
+                ImGui.BeginGroup();
+                ImGui.Dummy(new Vector2(0, ImGui.GetTextLineHeightWithSpacing())); // miejsce na etykietę
+                if (ImGui.Button("Create Pull Request", new Vector2(prButtonWidth, 0)))
+                {
+                    repositoryManager.CurrentRepository?.CreatePullRequest();
+                }
+                ImGui.EndGroup();
+
+                ImGui.Separator();
             }
-            ImGui.EndGroup();
-
-            ImGui.SameLine();
-
-            // Pull Request button
-            ImGui.BeginGroup();
-            ImGui.Dummy(new Vector2(0, ImGui.GetTextLineHeightWithSpacing())); // miejsce na etykietę
-            if (ImGui.Button("Create Pull Request", new Vector2(prButtonWidth, 0)))
-            {
-                repositoryManager.CurrentRepository?.CreatePullRequest();
-            }
-            ImGui.EndGroup();
-
-            ImGui.Separator();
 
             ImGui.End();
         }
