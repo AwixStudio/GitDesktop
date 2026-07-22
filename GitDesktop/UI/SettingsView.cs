@@ -20,12 +20,12 @@ namespace GitDesktop.UI
         {
             ImGui.Begin("Settings", ref isOpen);
 
-            string password = CredentialManager.RetrieveCredentials().password;
-            ImGui.InputText("Personal access token", ref password, 100);
-            if(password != null && password != CredentialManager.RetrieveCredentials().password)
-            {
-                CredentialManager.StoreCredentials(CredentialManager.RetrieveCredentials().username, password);
-            }
+            //string password = CredentialManager.RetrieveCredentials().password;
+            //ImGui.InputText("Personal access token", ref password, 100);
+            //if(password != null && password != CredentialManager.RetrieveCredentials().password)
+            //{
+            //    CredentialManager.StoreCredentials(CredentialManager.RetrieveCredentials().username, password);
+            //}
 
             ImGui.End();
 
