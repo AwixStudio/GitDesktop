@@ -177,7 +177,7 @@ namespace GitDesktop.Git
             return commits;
         }
 
-        public static async Task UpdateFromMain(string repositoryPath, Action<string, float> onProgress)
+        public static async Task<MergeConflictResult> UpdateFromMain(string repositoryPath, Action<string, float> onProgress)
         {
             onProgress("Fetching...", 5);
 
@@ -214,10 +214,34 @@ namespace GitDesktop.Git
                     }
                 });
 
+            // Check if merge resulted in conflicts
             if (exit != 0)
-                throw new Exception("Merge failed.");
+            {
+                // Merge failed - check if it's due to conflicts
+                var conflictedFiles = GetConflictedFiles(repositoryPath);
+
+                if (conflictedFiles.Count > 0)
+                {
+                    // Merge conflicts detected
+                    onProgress("Merge conflicts detected. Waiting for user resolution.", 95);
+
+                    return new MergeConflictResult
+                    {
+                        ConflictedFiles = conflictedFiles,
+                        ErrorMessage = "Merge conflicts detected. Please resolve them."
+                    };
+                }
+                else
+                {
+                    // Other merge error
+                    throw new Exception("Merge failed.");
+                }
+            }
 
             onProgress("Merging done.", 95);
+
+            // No conflicts, merge successful
+            return new MergeConflictResult { ConflictedFiles = [] };
         }
 
         public static string GetFileDiff(string repositoryPath, string filePath)
@@ -246,6 +270,89 @@ namespace GitDesktop.Git
                     return "Unable to load diff";
                 }
             }
+        }
+
+        public static List<ConflictedFile> GetConflictedFiles(string repositoryPath)
+        {
+            var conflictedFiles = new List<ConflictedFile>();
+
+            try
+            {
+                // Use git ls-files -u which shows exactly the unmerged files during a merge conflict
+                // Output format: [stage] [hash] [path]
+                string lsFilesResult = Execute(repositoryPath, "ls-files -u");
+                var uniquePaths = new HashSet<string>();
+
+                foreach (string line in lsFilesResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var parts = line.Split('\t');
+                    if (parts.Length > 1)
+                    {
+                        string filePath = parts[1];
+                        // Add each unique file path only once
+                        if (uniquePaths.Add(filePath))
+                        {
+                            conflictedFiles.Add(new ConflictedFile { Path = filePath });
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback: try git status --porcelain if ls-files fails
+                try
+                {
+                    string gitStatusResult = Execute(repositoryPath, "status --porcelain");
+
+                    foreach (string line in gitStatusResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        if (line.Length < 3)
+                            continue;
+
+                        // During merge conflicts, status shows: UU, AA, DD, UD, AU, etc.
+                        // where U = Unmerged, and both positions indicate unmerged state
+                        string statusCode = line.Substring(0, 2);
+
+                        // Both characters must be non-space and one must be U (unmerged)
+                        if (statusCode[0] == 'U' || statusCode[1] == 'U')
+                        {
+                            string filePath = line.Substring(3);
+                            conflictedFiles.Add(new ConflictedFile { Path = filePath });
+                        }
+                    }
+                }
+                catch
+                {
+                    // If all else fails, return empty list
+                }
+            }
+
+            return conflictedFiles;
+        }
+
+        public static void ResolveConflict(string repositoryPath, string filePath, string strategy)
+        {
+            // strategy should be "ours" (--ours) or "theirs" (--theirs)
+            if (strategy != "ours" && strategy != "theirs")
+                throw new ArgumentException("Strategy must be 'ours' or 'theirs'", nameof(strategy));
+
+            string cmd = $"checkout --{strategy} -- \"{filePath}\"";
+            Execute(repositoryPath, cmd);
+
+            // Stage the resolved file
+            Execute(repositoryPath, $"add \"{filePath}\"");
+        }
+
+        public static void CompleteMerge(string repositoryPath, string commitMessage)
+        {
+            // Complete the merge by committing
+            Execute(repositoryPath, $"commit -m \"{commitMessage}\"");
+        }
+
+        public static void AbortMerge(string repositoryPath)
+        {
+            // Abort the merge process
+            Execute(repositoryPath, "merge --abort");
         }
 
         public static void DiscardChanges(string repositoryPath, List<GitFile> files)

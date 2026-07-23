@@ -326,32 +326,38 @@ namespace GitDesktop.Git
             }
         }
 
-        public async Task UpdateFromMain(Action<string, float> onProgress)
+        public async Task<MergeConflictResult> UpdateFromMain(Action<string, float> onProgress)
         {
             try
             {
-                await GitService.UpdateFromMain(Path, onProgress);
+                var result = await GitService.UpdateFromMain(Path, onProgress);
 
-                // Refresh status after update
-                onProgress("Refreshing file status...", 97);
-                GitStatus status = GitService.GetStatus(Path);
-                RefreshChanges(status.Files);
-
-                // Refresh commits
-                onProgress("Refreshing commit history...", 99);
-                try
+                // If no conflicts, proceed with refresh
+                if (!result.HasConflicts)
                 {
-                    commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
-                }
-                catch
-                {
-                    commits = [];
+                    // Refresh status after update
+                    onProgress("Refreshing file status...", 97);
+                    GitStatus status = GitService.GetStatus(Path);
+                    RefreshChanges(status.Files);
+
+                    // Refresh commits
+                    onProgress("Refreshing commit history...", 99);
+                    try
+                    {
+                        commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+                    }
+                    catch
+                    {
+                        commits = [];
+                    }
+
+                    onProgress("Update completed!", 100);
+
+                    // Refresh branches after update (new branches might have been fetched)
+                    RefreshBranches();
                 }
 
-                onProgress("Update completed!", 100);
-
-                // Refresh branches after update (new branches might have been fetched)
-                RefreshBranches();
+                return result;
             }
             catch (Exception ex)
             {

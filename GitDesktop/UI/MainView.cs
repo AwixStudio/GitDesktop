@@ -186,11 +186,44 @@ namespace GitDesktop.UI
                         {
                             try
                             {
-                                await selectedRepository.UpdateFromMain((status, progress) =>
+                                var result = await selectedRepository.UpdateFromMain((status, progress) =>
                                 {
                                     progressPopup.UpdateStatus(status, progress);
                                 });
-                                progressPopup.Complete();
+
+                                if (result.HasConflicts)
+                                {
+                                    // Show conflict resolution dialog
+                                    progressPopup.UpdateStatus("Showing conflict resolution dialog...", 95);
+
+                                    // Create callback for after conflicts are resolved
+                                    Action onConflictsResolved = () =>
+                                    {
+                                        // Refresh the main view to show updated file list
+                                        // The repository has already refreshed its internal state in the dialog
+                                    };
+
+                                    ConflictResolutionDialog conflictDialog = new(selectedRepository, result.ConflictedFiles, onConflictsResolved);
+
+                                    // Wait for dialog to complete
+                                    while (!conflictDialog.IsResolved && !conflictDialog.WasCancelled)
+                                    {
+                                        await Task.Delay(100);
+                                    }
+
+                                    if (conflictDialog.WasCancelled)
+                                    {
+                                        progressPopup.Error("Merge cancelled by user.");
+                                    }
+                                    else
+                                    {
+                                        progressPopup.Complete();
+                                    }
+                                }
+                                else
+                                {
+                                    progressPopup.Complete();
+                                }
                             }
                             catch (Exception ex)
                             {
