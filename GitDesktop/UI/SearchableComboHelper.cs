@@ -12,18 +12,14 @@ namespace GitDesktop.UI
     public class SearchableComboHelper
     {
         private string searchText = "";
-        private bool isOpen = false;
-        private int hoveredIndex = 0;
 
         public bool BeginCombo(string label, string previewValue, string id = "")
         {
             if (ImGui.BeginCombo(id, previewValue, ImGuiComboFlags.HeightLargest))
             {
-                isOpen = true;
                 return true;
             }
 
-            isOpen = false;
             return false;
         }
 
@@ -41,7 +37,6 @@ namespace GitDesktop.UI
         public int SelectableList(string[] items, int currentSelectedIndex)
         {
             int selectedIndex = -1;
-            hoveredIndex = 0;
 
             if (string.IsNullOrEmpty(searchText))
             {
@@ -98,7 +93,6 @@ namespace GitDesktop.UI
         public void Reset()
         {
             searchText = "";
-            hoveredIndex = 0;
         }
     }
 }
