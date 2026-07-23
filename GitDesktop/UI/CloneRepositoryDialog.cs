@@ -14,6 +14,7 @@ namespace GitDesktop.UI
         private string statusMessage = "";
         private string errorMessage = "";
         private bool isCloning = false;
+        private bool isProcessing = false; // Flaga aby zablokować UI podczas przetwarzania (klonowania i czekania na zamknięcie)
         private const int TextInputBufferSize = 1024;
         private byte[] destinationPathBuffer;
         private byte[] repositoryUrlBuffer;
@@ -35,6 +36,7 @@ namespace GitDesktop.UI
             statusMessage = "";
             errorMessage = "";
             isCloning = false;
+            isProcessing = false;
             Array.Clear(destinationPathBuffer, 0, destinationPathBuffer.Length);
             Array.Clear(repositoryUrlBuffer, 0, repositoryUrlBuffer.Length);
 
@@ -114,7 +116,7 @@ namespace GitDesktop.UI
 
                 ImGui.SetCursorPosX((availableWidth - buttonsWidth) / 2 + ImGui.GetCursorPosX());
 
-                ImGui.BeginDisabled(isCloning || string.IsNullOrWhiteSpace(repositoryUrl) || string.IsNullOrWhiteSpace(destinationPath));
+                ImGui.BeginDisabled(isProcessing || string.IsNullOrWhiteSpace(repositoryUrl) || string.IsNullOrWhiteSpace(destinationPath));
                 if (ImGui.Button("Clone", new System.Numerics.Vector2(buttonWidth, 0)))
                 {
                     TryCloneRepository();
@@ -124,7 +126,7 @@ namespace GitDesktop.UI
                 ImGui.SetItemDefaultFocus();
                 ImGui.SameLine();
 
-                ImGui.BeginDisabled(isCloning);
+                ImGui.BeginDisabled(isProcessing);
                 if (ImGui.Button("Cancel", new System.Numerics.Vector2(buttonWidth, 0)))
                 {
                     Close();
@@ -197,6 +199,7 @@ namespace GitDesktop.UI
             errorMessage = "";
             statusMessage = "Cloning repository...";
             isCloning = true;
+            isProcessing = true; // Zablokuj UI podczas przetwarzania
 
             CloneRepositoryAsync();
         }
@@ -237,6 +240,10 @@ namespace GitDesktop.UI
                 errorMessage = $"Clone failed: {ex.Message}";
                 statusMessage = "";
                 isCloning = false;
+            }
+            finally
+            {
+                isProcessing = false;
             }
         }
     }
