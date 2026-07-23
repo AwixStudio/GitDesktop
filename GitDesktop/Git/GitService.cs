@@ -94,6 +94,7 @@ namespace GitDesktop.Git
         public static void HardReset(string repositoryPath)
         {
             Execute(repositoryPath, "reset --hard HEAD");
+            Execute(repositoryPath, "git clean -fd");
         }
 
         public static async Task CloneAsync(string repositoryUrl, string destinationPath, Action<string>? onProgress = null)
