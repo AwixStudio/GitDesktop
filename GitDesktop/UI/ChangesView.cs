@@ -132,34 +132,41 @@ namespace GitDesktop.UI
                 ImGui.EndChild();
             }
 
-            // Commit message area
-            ImGui.TextUnformatted("Commit Message:");
+            // Check if any files are marked for commit
+            bool hasMarkedFiles = changes.Any(f => f.MarkedForCommit);
 
-            ImGui.InputTextMultiline(
-                "##CommitMessage",
-                ref commitMessage,
-                1024,
-                new System.Numerics.Vector2(-1, 60f),
-                ImGuiInputTextFlags.None
-            );
-
-            float width = ImGui.GetContentRegionAvail().X;
-            float buttonWidth = (width - ImGui.GetStyle().ItemSpacing.X) * 0.5f;
-
-            if (ImGui.Button("Commit", new Vector2(buttonWidth, 0)))
+            // Only show buttons if files are marked for commit
+            if (hasMarkedFiles)
             {
-                if (!string.IsNullOrWhiteSpace(commitMessage))
+                // Commit message area
+                ImGui.TextUnformatted("Commit Message:");
+
+                ImGui.InputTextMultiline(
+                    "##CommitMessage",
+                    ref commitMessage,
+                    1024,
+                    new System.Numerics.Vector2(-1, 60f),
+                    ImGuiInputTextFlags.None
+                );
+
+                float width = ImGui.GetContentRegionAvail().X;
+                float buttonWidth = (width - ImGui.GetStyle().ItemSpacing.X) * 0.5f;
+
+                if (ImGui.Button("Commit", new Vector2(buttonWidth, 0)))
                 {
-                    currentRepository?.CommitChanges(commitMessage);
-                    commitMessage = string.Empty;
+                    if (!string.IsNullOrWhiteSpace(commitMessage))
+                    {
+                        currentRepository?.CommitChanges(commitMessage);
+                        commitMessage = string.Empty;
+                    }
                 }
-            }
 
-            ImGui.SameLine();
+                ImGui.SameLine();
 
-            if (ImGui.Button("Discard", new Vector2(buttonWidth, 0)))
-            {
-                currentRepository?.DiscardChanges();
+                if (ImGui.Button("Discard", new Vector2(buttonWidth, 0)))
+                {
+                    currentRepository?.DiscardChanges();
+                }
             }
 
             ImGui.End();
