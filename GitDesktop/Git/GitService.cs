@@ -1,8 +1,10 @@
 ﻿using GitDesktop.Git.Providers;
+using RestSharp;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 
 namespace GitDesktop.Git
 {
@@ -114,11 +116,76 @@ namespace GitDesktop.Git
                 throw new InvalidOperationException($"Git clone failed with exit code {exitCode}");
         }
 
+        public static void InitRepository(string repositoryPath, string branchName = "main")
+        {
+            // Ensure directory exists
+            if (!Directory.Exists(repositoryPath))
+            {
+                Directory.CreateDirectory(repositoryPath);
+            }
+
+            // Initialize git repository
+            Execute(repositoryPath, "init");
+
+            // Set default branch name using config (works before first commit)
+            try
+            {
+                Execute(repositoryPath, $"config init.defaultBranch {branchName}");
+            }
+            catch
+            {
+                // If config fails, ignore - symbolic-ref will be set after first commit
+            }
+
+            // Create initial commit or README
+            try
+            {
+                string readmePath = Path.Combine(repositoryPath, "README.md");
+                File.WriteAllText(readmePath, $"# {Path.GetFileName(repositoryPath)}\n\nInitial repository\n");
+
+                Execute(repositoryPath, "add README.md");
+                Execute(repositoryPath, "config user.email \"info@example.com\"");
+                Execute(repositoryPath, "config user.name \"Local User\"");
+                Execute(repositoryPath, $"commit -m \"Initial commit\"");
+
+                // Set symbolic-ref after first commit succeeds
+                try
+                {
+                    Execute(repositoryPath, $"symbolic-ref HEAD refs/heads/{branchName}");
+                }
+                catch { }
+            }
+            catch
+            {
+                // If commit fails, repository is still initialized but empty
+            }
+        }
+
         public static string GetDefaultBranchName(string repositoryPath)
         {
-            string gitDefaultBranchCmdResult = Execute(repositoryPath, "symbolic-ref --short refs/remotes/origin/HEAD");
-            string defaultBranch = gitDefaultBranchCmdResult.Trim().Split('/').Last();
-            return defaultBranch;
+            try
+            {
+                // Try to get default branch from remote origin (works for cloned repos)
+                string gitDefaultBranchCmdResult = Execute(repositoryPath, "symbolic-ref --short refs/remotes/origin/HEAD");
+                string defaultBranch = gitDefaultBranchCmdResult.Trim().Split('/').Last();
+                return defaultBranch;
+            }
+            catch
+            {
+                // Fallback for local repos without remote: get current branch
+                try
+                {
+                    string currentBranch = Execute(repositoryPath, "rev-parse --abbrev-ref HEAD").Trim();
+                    if (!string.IsNullOrWhiteSpace(currentBranch) && currentBranch != "HEAD")
+                    {
+                        return currentBranch;
+                    }
+                }
+                catch { }
+
+                // Ultimate fallback: return "main"
+                return "main";
+            }
         }
 
         public static List<GitCommit> GetCommitLog(string repositoryPath, string branchName, int limit = 100)
@@ -561,17 +628,25 @@ namespace GitDesktop.Git
 
         public static IRepositoryProvider GetProvider(string repositoryPath)
         {
-            string remote = Execute(repositoryPath, "remote get-url origin");
-
-            switch (remote)
+            try
             {
-                case string url when url.Contains("github.com"):
-                    var (owner, repository) = ParseRepositoryUrl(remote);
-                    return new Provider_Github(repository, owner);
-                case string url when url.Contains("gitlab.com"):
-                    return new Provider_Gitlab();
-                default:
-                    throw new NotSupportedException("Unsupported remote provider.");
+                string remote = Execute(repositoryPath, "remote get-url origin");
+
+                switch (remote)
+                {
+                    case string url when url.Contains("github.com"):
+                        var (owner, repository) = ParseRepositoryUrl(remote);
+                        return new Provider_Github(repository, owner);
+                    case string url when url.Contains("gitlab.com"):
+                        return new Provider_Gitlab();
+                    default:
+                        throw new NotSupportedException("Unsupported remote provider.");
+                }
+            }
+            catch
+            {
+                // Return null provider for local repositories without remote
+                return new Provider_Local();
             }
         }
 
@@ -601,6 +676,143 @@ namespace GitDesktop.Git
 
 
             throw new ArgumentException("Invalid Git repository URL.", nameof(url));
+        }
+
+        /// <summary>
+        /// Creates a new repository on GitHub using the GitHub API.
+        /// Requires Git Credential Manager to have GitHub credentials stored.
+        /// </summary>
+        public static (string repoUrl, string cloneUrl) CreateRepositoryOnGitHub(string repositoryName, string description = "", bool isPrivate = false)
+        {
+            // Get GitHub token from git credential manager
+            string token = GetGitHubToken();
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                throw new InvalidOperationException("GitHub authentication failed. Please ensure Git Credential Manager has GitHub credentials stored.");
+            }
+
+            // Get GitHub username
+            string username = GetGitHubUsername(token);
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                throw new InvalidOperationException("Could not retrieve GitHub username.");
+            }
+
+            // Create repository using GitHub API
+            var client = new RestClient("https://api.github.com");
+            var request = new RestRequest("/user/repos", Method.Post);
+
+            // Add authentication header
+            request.AddHeader("Authorization", $"token {token}");
+            request.AddHeader("Accept", "application/vnd.github.v3+json");
+            request.AddHeader("User-Agent", "GitDesktop");
+
+            // Add request body
+            var body = new
+            {
+                name = repositoryName,
+                description = description ?? "",
+                @private = isPrivate,
+                auto_init = true
+            };
+
+            request.AddJsonBody(body);
+
+            var response = client.Execute(request);
+
+            if (!response.IsSuccessful)
+            {
+                throw new InvalidOperationException($"Failed to create repository on GitHub: {response.Content}");
+            }
+
+            // Parse response to get clone URL
+            using (JsonDocument doc = JsonDocument.Parse(response.Content))
+            {
+                JsonElement root = doc.RootElement;
+                string cloneUrl = root.GetProperty("clone_url").GetString();
+                string htmlUrl = root.GetProperty("html_url").GetString();
+
+                return (htmlUrl, cloneUrl);
+            }
+        }
+
+        /// <summary>
+        /// Gets GitHub token from git credential manager.
+        /// </summary>
+        private static string GetGitHubToken()
+        {
+            try
+            {
+                // Use git credential helper to get token from Git Credential Manager
+                string credentialUrl = "https://github.com";
+                var processInfo = new ProcessStartInfo
+                {
+                    FileName = gitExe,
+                    Arguments = "credential fill",
+                    UseShellExecute = false,
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                };
+
+                using (var process = Process.Start(processInfo))
+                {
+                    // Send protocol and host
+                    process.StandardInput.WriteLine($"protocol=https");
+                    process.StandardInput.WriteLine($"host=github.com");
+                    process.StandardInput.WriteLine();
+                    process.StandardInput.Close();
+
+                    string output = process.StandardOutput.ReadToEnd();
+                    process.WaitForExit();
+
+                    // Parse output to get password (token)
+                    foreach (string line in output.Split('\n'))
+                    {
+                        if (line.StartsWith("password="))
+                        {
+                            return line.Replace("password=", "").Trim();
+                        }
+                    }
+                }
+
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Gets GitHub username using the API token.
+        /// </summary>
+        private static string GetGitHubUsername(string token)
+        {
+            try
+            {
+                var client = new RestClient("https://api.github.com");
+                var request = new RestRequest("/user", Method.Get);
+                request.AddHeader("Authorization", $"token {token}");
+                request.AddHeader("User-Agent", "GitDesktop");
+
+                var response = client.Execute(request);
+
+                if (response.IsSuccessful)
+                {
+                    using (JsonDocument doc = JsonDocument.Parse(response.Content))
+                    {
+                        JsonElement root = doc.RootElement;
+                        return root.GetProperty("login").GetString();
+                    }
+                }
+
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }

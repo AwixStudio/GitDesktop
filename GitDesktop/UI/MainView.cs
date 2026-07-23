@@ -9,6 +9,7 @@ namespace GitDesktop.UI
         private readonly RepositoryManager repositoryManager;
         private readonly AddExistingRepositoryDialog addExistingRepositoryDialog;
         private readonly CloneRepositoryDialog cloneRepositoryDialog;
+        private readonly CreateRepositoryDialog createRepositoryDialog;
         private readonly CreateBranchDialogHelper createBranchDialogHelper;
         private readonly SearchableComboHelper branchComboHelper;
 
@@ -33,12 +34,13 @@ namespace GitDesktop.UI
 
             addExistingRepositoryDialog = new AddExistingRepositoryDialog(repositoryManager);
             cloneRepositoryDialog = new CloneRepositoryDialog(repositoryManager);
+            createRepositoryDialog = new CreateRepositoryDialog(repositoryManager);
             createBranchDialogHelper = new CreateBranchDialogHelper(repositoryManager);
             branchComboHelper = new SearchableComboHelper();
 
             repositoryMenu_addExisting = new("Add existing repository", () => addExistingRepositoryDialog.Open());
             repositoryMenu_clone = new("Clone repository", () => cloneRepositoryDialog.Open());
-            repositoryMenu_createNew = new("Create new repository", () => { });
+            repositoryMenu_createNew = new("Create new repository", () => createRepositoryDialog.Open());
             repositoryMenu_gitCmd = new("Open in cmd", () => repositoryManager.CurrentRepository?.OpenInGitCmd());
             repositoryMenu_openInExplorer = new("Open in explorer", () => repositoryManager.CurrentRepository?.OpenInExplorer());
 
