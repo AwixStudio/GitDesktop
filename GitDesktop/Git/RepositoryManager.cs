@@ -386,6 +386,15 @@ namespace GitDesktop.Git
             });
         }
 
+        public void OpenInExplorer()
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = Path,
+                UseShellExecute = true
+            });
+        }
+
         public void CreatePullRequest()
         {
             Provider.CreatePullRequest(Path, "Title", CurrentBranch.Name, "master");            

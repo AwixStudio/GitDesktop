@@ -16,6 +16,7 @@ namespace GitDesktop.UI
         private readonly MenuItem repositoryMenu_clone;
         private readonly MenuItem repositoryMenu_createNew;
         private readonly MenuItem repositoryMenu_gitCmd;
+        private readonly MenuItem repositoryMenu_openInExplorer;
         private readonly Menu repositoryMenu;
 
         private readonly MenuItem branchMenu_createNew;
@@ -39,13 +40,15 @@ namespace GitDesktop.UI
             repositoryMenu_clone = new("Clone repository", () => cloneRepositoryDialog.Open());
             repositoryMenu_createNew = new("Create new repository", () => { });
             repositoryMenu_gitCmd = new("Open in cmd", () => repositoryManager.CurrentRepository?.OpenInGitCmd());
+            repositoryMenu_openInExplorer = new("Open in Explorer", () => repositoryManager.CurrentRepository?.OpenInExplorer());
 
             repositoryMenu = new("Repository",
             [
                 repositoryMenu_addExisting,
                 repositoryMenu_clone,
                 repositoryMenu_createNew,
-                repositoryMenu_gitCmd
+                repositoryMenu_gitCmd,
+                repositoryMenu_openInExplorer
             ]);
 
             branchMenu_createNew = new("Create new branch", () => createBranchDialogHelper.Open());
@@ -108,6 +111,7 @@ namespace GitDesktop.UI
             const float branchWidth = 220;
             const float updateButtonWidth = 170;
             const float prButtonWidth = 180;
+            const float explorerButtonWidth = 160;
 
             // Repository
             ImGui.BeginGroup();

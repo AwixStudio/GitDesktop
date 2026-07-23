@@ -31,6 +31,7 @@ namespace GitDesktop
             window.Update += OnUpdate;
             window.Render += OnRender;
             window.Closing += OnClosing;
+            window.FocusChanged += OnFocusChanged;
 
             repositoryManager = new RepositoryManager();
 
@@ -97,6 +98,14 @@ namespace GitDesktop
             foreach (var view in viewsCopy)
             {
                 view.Render();
+            }
+        }
+
+        private void OnFocusChanged(bool focused)
+        {
+            if (focused)
+            {
+                repositoryManager.RefreshChanges();
             }
         }
 
