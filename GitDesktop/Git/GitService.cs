@@ -250,11 +250,46 @@ namespace GitDesktop.Git
 
         public static void DiscardChanges(string repositoryPath, List<GitFile> files)
         {
-            var selectedFiles = files
-                .Where(f => f.MarkedForCommit)
-                .Select(f => $"\"{f.Path}\"");
-            string arguments = "checkout -- " + string.Join(' ', selectedFiles);
-            Execute(repositoryPath, arguments);
+            var selected = files.Where(f => f.MarkedForCommit).ToList();
+
+            // Usuń pliki nieśledzone
+            ExecuteForFiles(
+                repositoryPath,
+                "clean -f --",
+                selected.Where(f =>
+                    f.IndexState == GitFileState.Untracked &&
+                    f.WorkingTreeState == GitFileState.Untracked));
+
+            // Usuń ze stage tylko pliki, które są faktycznie zindeksowane
+            ExecuteForFiles(
+                repositoryPath,
+                "restore --staged --",
+                selected.Where(f =>
+                    f.IndexState != GitFileState.Unmodified &&
+                    f.IndexState != GitFileState.Untracked));
+
+            // Przywróć zawartość plików istniejących w repozytorium
+            ExecuteForFiles(
+                repositoryPath,
+                "restore --",
+                selected.Where(f =>
+                    f.WorkingTreeState != GitFileState.Unmodified &&
+                    f.WorkingTreeState != GitFileState.Untracked));
+        }
+
+        private static void ExecuteForFiles(
+            string repositoryPath,
+            string command,
+            IEnumerable<GitFile> files)
+        {
+            var paths = files
+                .Select(f => $"\"{f.Path.Trim('"')}\"")
+                .ToList();
+
+            if (paths.Count == 0)
+                return;
+
+            Execute(repositoryPath, $"{command} {string.Join(' ', paths)}");
         }
 
         private static string Execute(string repositoryPath, string arguments)
@@ -266,13 +301,23 @@ namespace GitDesktop.Git
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.CreateNoWindow = true;
-            process.StartInfo.StandardOutputEncoding = Encoding.UTF8;            
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.StandardOutputEncoding = Encoding.UTF8;
+            process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.StandardErrorEncoding = Encoding.UTF8;
             process.Start();
+
             string output = process.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
+
             process.WaitForExit();
 
             if (process.ExitCode != 0)
-                throw new InvalidOperationException($"Git command failed with exit code {process.ExitCode}");
+            {
+                Console.WriteLine(arguments);
+                throw new InvalidOperationException(
+                    $"Git exited with code {process.ExitCode}\n{error}");
+            }
 
             return output;
         }

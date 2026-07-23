@@ -40,7 +40,7 @@ namespace GitDesktop.UI
             repositoryMenu_clone = new("Clone repository", () => cloneRepositoryDialog.Open());
             repositoryMenu_createNew = new("Create new repository", () => { });
             repositoryMenu_gitCmd = new("Open in cmd", () => repositoryManager.CurrentRepository?.OpenInGitCmd());
-            repositoryMenu_openInExplorer = new("Open in Explorer", () => repositoryManager.CurrentRepository?.OpenInExplorer());
+            repositoryMenu_openInExplorer = new("Open in explorer", () => repositoryManager.CurrentRepository?.OpenInExplorer());
 
             repositoryMenu = new("Repository",
             [
