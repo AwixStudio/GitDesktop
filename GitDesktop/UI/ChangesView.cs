@@ -120,8 +120,10 @@ namespace GitDesktop.UI
                             }
 
                             ImGui.BeginTooltip();
-                            ImGui.Text(change.GetCachedDiff());
-                            ImGui.EndTooltip();
+                            string cachedDiff = change.GetCachedDiff();                            
+                            string truncatedDiff = cachedDiff.Length > 500 ? cachedDiff.Substring(0, 500) + "..." : cachedDiff;
+                            ImGui.TextUnformatted(truncatedDiff);
+                            ImGui.EndTooltip();                            
                         }
 
                         changeIndex++;

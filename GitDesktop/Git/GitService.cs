@@ -123,6 +123,37 @@ namespace GitDesktop.Git
             return commits;
         }
 
+        public static List<GitCommit> GetCommitLog(string repositoryPath, string branchName, int limit, int offset)
+        {
+            string gitLogCmd = "log " + branchName + " --pretty=format:\\\"" + "%H|%an|%ai|%s|%P" + "\\\" --max-count=" + (limit + 1) + " --skip=" + offset;
+            string gitLogCmdResult = Execute(repositoryPath, gitLogCmd);
+
+            List<GitCommit> commits = [];
+            int count = 0;
+            foreach (string line in gitLogCmdResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (count >= limit)
+                    break;
+
+                var parts = line.Split('|');
+                if (parts.Length >= 5)
+                {
+                    string hash = parts[0].Trim();
+                    string author = parts[1].Trim();
+                    if (DateTime.TryParse(parts[2].Trim(), out DateTime date))
+                    {
+                        string message = parts[3].Trim();
+                        string parentHash = parts[4].Trim().Split(' ').FirstOrDefault() ?? "";
+
+                        commits.Add(new GitCommit(hash, author, date, message, parentHash));
+                        count++;
+                    }
+                }
+            }
+
+            return commits;
+        }
+
         public static async Task UpdateFromMain(string repositoryPath, Action<string, float> onProgress)
         {
             onProgress("Fetching...", 5);
