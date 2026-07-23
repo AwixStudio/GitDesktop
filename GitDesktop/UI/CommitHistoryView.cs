@@ -101,7 +101,7 @@ namespace GitDesktop.UI
 
                         // Date column
                         ImGui.TableSetColumnIndex(2);
-                        ImGui.TextUnformatted(commit.Date.ToString("yyyy-MM-dd HH:mm") + "łąść");
+                        ImGui.TextUnformatted(commit.Date.ToString("yyyy-MM-dd HH:mm"));
 
                         // Message column
                         ImGui.TableSetColumnIndex(3);
