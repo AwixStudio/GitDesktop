@@ -236,8 +236,14 @@ namespace GitDesktop.Git
 
         private static string Execute(string repositoryPath, string arguments)
         {
+            string gitExe = Path.Combine(
+                AppContext.BaseDirectory,
+                "GitPortable",
+                "cmd",
+                "git.exe");
+
             Process process = new();
-            process.StartInfo.FileName = "git";
+            process.StartInfo.FileName = gitExe;
             process.StartInfo.Arguments = arguments;
             process.StartInfo.WorkingDirectory = repositoryPath;
             process.StartInfo.RedirectStandardOutput = true;
