@@ -57,7 +57,7 @@ namespace GitDesktop.UI
 
             if (ImGui.BeginPopupModal("Clone Repository", ref isOpen, ImGuiWindowFlags.AlwaysAutoResize))
             {
-                ImGui.TextWrapped("Enter the repository URL and destination folder:");
+                ImGui.TextWrapped("Enter the repository URL and select destination folder where repository will be cloned:");
                 ImGui.Spacing();
 
                 // Repository URL input field
@@ -161,26 +161,32 @@ namespace GitDesktop.UI
             // Validate destination path
             try
             {
-                string parentDir = Path.GetDirectoryName(destinationPath);
-                if (string.IsNullOrEmpty(parentDir))
+                // Sprawdzenie czy podana ścieżka jest prawidłowa
+                if (string.IsNullOrEmpty(destinationPath))
                 {
                     errorMessage = "Invalid destination path.";
                     return;
                 }
 
-                // Check if parent directory exists
+                // Pobranie katalogu nadrzędnego
+                string parentDir = Path.GetDirectoryName(destinationPath);
+
+                // Jeśli destinationPath jest bezwzględną ścieżką, sprawdzamy jej rodzica
+                // Jeśli to relatywna ścieżka, używamy bieżącego katalogu
+                if (string.IsNullOrEmpty(parentDir))
+                {
+                    parentDir = Directory.GetCurrentDirectory();
+                }
+
+                // Jeśli parentDir nie istnieje, to przyczyna do błędu
                 if (!Directory.Exists(parentDir))
                 {
                     errorMessage = "Parent directory does not exist.";
                     return;
                 }
 
-                // Check if destination already exists
-                if (Directory.Exists(destinationPath))
-                {
-                    errorMessage = "Destination folder already exists.";
-                    return;
-                }
+                // Akceptujemy zarówno istniejące jak i nieistniejące foldery docelowe
+                // Git clone sam obsłuży tworzenie folderu, jeśli jest potrzebny
             }
             catch (Exception ex)
             {
