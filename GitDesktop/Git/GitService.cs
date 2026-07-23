@@ -8,6 +8,12 @@ namespace GitDesktop.Git
 {
     internal class GitService
     {
+        private static string gitExe = Path.Combine(
+            AppContext.BaseDirectory,
+            "GitPortable",
+            "cmd",
+            "git.exe");
+
         public static GitStatus GetStatus(string repositoryPath)
         {
             string gitStatusCmdResult = Execute(repositoryPath, "status --porcelain");
@@ -236,12 +242,6 @@ namespace GitDesktop.Git
 
         private static string Execute(string repositoryPath, string arguments)
         {
-            string gitExe = Path.Combine(
-                AppContext.BaseDirectory,
-                "GitPortable",
-                "cmd",
-                "git.exe");
-
             Process process = new();
             process.StartInfo.FileName = gitExe;
             process.StartInfo.Arguments = arguments;
@@ -264,7 +264,7 @@ namespace GitDesktop.Git
         {
             using Process process = new();
 
-            process.StartInfo.FileName = "git";
+            process.StartInfo.FileName = gitExe;
             process.StartInfo.Arguments = arguments;
             process.StartInfo.Environment["GIT_TRACE2_EVENT"] = "-";
             process.StartInfo.WorkingDirectory = repositoryPath;
