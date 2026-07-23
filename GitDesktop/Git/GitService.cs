@@ -212,6 +212,7 @@ namespace GitDesktop.Git
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.CreateNoWindow = true;
+            process.StartInfo.StandardOutputEncoding = Encoding.UTF8;            
             process.Start();
             string output = process.StandardOutput.ReadToEnd();
             process.WaitForExit();
@@ -235,7 +236,9 @@ namespace GitDesktop.Git
             process.StartInfo.CreateNoWindow = true;
 
             process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.StandardOutputEncoding = Encoding.UTF8;
             process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.StandardErrorEncoding = Encoding.UTF8;
 
             process.EnableRaisingEvents = true;
 

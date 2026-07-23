@@ -277,6 +277,30 @@ namespace GitDesktop
 
         private unsafe void CreateFontTexture()
         {
+            string fontPath = Path.Combine(
+                AppContext.BaseDirectory,
+                "Fonts",
+                "Roboto_Condensed-Medium.ttf");
+
+            unsafe
+            {
+                ushort[] ranges =
+                {
+                    0x0020, 0x00FF,   // Basic Latin + Latin-1
+                    0x0100, 0x017F,   // Latin Extended-A (zawiera polskie znaki)
+                    0
+                };
+
+                fixed (ushort* pRanges = ranges)
+                {
+                    io.Fonts.AddFontFromFileTTF(
+                        fontPath,
+                        16.0f,
+                        null,
+                        (IntPtr)pRanges);
+                }
+            }
+
             // Generate the font texture from default ImGui's font atlas
             io.Fonts.GetTexDataAsRGBA32(
                         out IntPtr pixels,

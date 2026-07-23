@@ -10,11 +10,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Fonts\Roboto_Condensed-Medium.ttf" />
     <None Remove="Shaders\ImGuiFrag.glsl" />
     <None Remove="Shaders\ImGUIVert.glsl" />
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="Fonts\Roboto_Condensed-Medium.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="Shaders\ImGuiFrag.glsl">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
