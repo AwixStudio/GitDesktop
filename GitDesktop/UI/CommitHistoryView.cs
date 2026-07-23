@@ -52,15 +52,8 @@ namespace GitDesktop.UI
             ImGui.Text($"Commits: {commits.Count}");
             ImGui.Separator();
 
-            // Calculate height for the table container, leaving room for Load More button
-            float loadMoreButtonHeight = 0f;
-            if (commits.Count >= 100 && currentRepository.HasMoreCommits)
-            {
-                loadMoreButtonHeight = ImGui.GetFrameHeightWithSpacing() + ImGui.GetStyle().ItemSpacing.Y;
-            }
-
             // Container for the commits list with fixed height
-            if (ImGui.BeginChild("CommitsListContainer", new System.Numerics.Vector2(-1, -loadMoreButtonHeight)))
+            if (ImGui.BeginChild("CommitsListContainer", new System.Numerics.Vector2(-1, -5f)))
             {
                 if (ImGui.BeginTable("###CommitsList", 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingFixedFit))
                 {
@@ -121,15 +114,6 @@ namespace GitDesktop.UI
                     ImGui.EndTable();
                 }
                 ImGui.EndChild();
-            }
-
-            // Load More button - only show if max commits loaded and more are available
-            if (commits.Count >= 100 && currentRepository.HasMoreCommits)
-            {
-                if (ImGui.Button("Load More Commits", new System.Numerics.Vector2(-1, 30)))
-                {
-                    currentRepository.LoadMoreCommits();
-                }
             }
 
             contextMenuHelper.RenderCreateBranchDialog();

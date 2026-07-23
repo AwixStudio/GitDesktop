@@ -96,9 +96,26 @@ namespace GitDesktop.Git
             Execute(repositoryPath, "reset --hard HEAD");
         }
 
+        public static async Task CloneAsync(string repositoryUrl, string destinationPath, Action<string>? onProgress = null)
+        {
+            // Ensure parent directory exists
+            string parentDirectory = Path.GetDirectoryName(destinationPath) ?? destinationPath;
+            if (!Directory.Exists(parentDirectory))
+            {
+                Directory.CreateDirectory(parentDirectory);
+            }
+
+            string arguments = $@"clone ""{repositoryUrl}"" ""{destinationPath}""";
+
+            int exitCode = await ExecuteAsync(parentDirectory, arguments, onProgress);
+
+            if (exitCode != 0)
+                throw new InvalidOperationException($"Git clone failed with exit code {exitCode}");
+        }
+
         public static string GetDefaultBranchName(string repositoryPath)
         {
-            string gitDefaultBranchCmdResult = Execute(repositoryPath, "symbolic-ref refs/remotes/origin/HEAD");
+            string gitDefaultBranchCmdResult = Execute(repositoryPath, "symbolic-ref --short refs/remotes/origin/HEAD");
             string defaultBranch = gitDefaultBranchCmdResult.Trim().Split('/').Last();
             return defaultBranch;
         }
@@ -306,106 +323,131 @@ namespace GitDesktop.Git
 
             return process.ExitCode;
         }
-            /// <summary>
-            /// Create a new branch from a specific commit
-            /// </summary>
-            public static void CreateBranch(string repositoryPath, string branchName, string commitHash)
+
+        private static string ExecuteWithoutRepository(string workingDirectory, string arguments)
+        {
+            Process process = new();
+
+            process.StartInfo.FileName = gitExe;
+            process.StartInfo.Arguments = arguments;
+            process.StartInfo.WorkingDirectory = workingDirectory;
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.StandardOutputEncoding = Encoding.UTF8;
+            process.StartInfo.StandardErrorEncoding = Encoding.UTF8;
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.CreateNoWindow = true;
+
+            process.Start();
+
+            string output = process.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
+
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException(error);
+
+            return output;
+        }
+
+        public static void CreateBranch(string repositoryPath, string branchName, string commitHash)
+        {
+            var process = new Process
             {
-                var process = new Process
+                StartInfo = new ProcessStartInfo
                 {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "git",
-                        Arguments = $"branch {branchName} {commitHash}",
-                        WorkingDirectory = repositoryPath,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-
-                process.Start();
-                process.WaitForExit();
-
-                if (process.ExitCode != 0)
-                {
-                    string error = process.StandardError.ReadToEnd();
-                    throw new Exception($"Git branch failed: {error}");
+                    FileName = "git",
+                    Arguments = $"branch {branchName} {commitHash}",
+                    WorkingDirectory = repositoryPath,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
                 }
-            }
+            };
 
-            /// <summary>
-            /// Perform cherry-pick operation
-            /// </summary>
-            public static void CherryPick(string repositoryPath, string commitHash)
+            process.Start();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
             {
-                var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "git",
-                        Arguments = $"cherry-pick {commitHash}",
-                        WorkingDirectory = repositoryPath,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-
-                process.Start();
-                process.WaitForExit();
-
-                if (process.ExitCode != 0)
-                {
-                    string error = process.StandardError.ReadToEnd();
-                    throw new Exception($"Git cherry-pick failed: {error}");
-                }
-            }
-
-            public static IRepositoryProvider GetProvider(string repositoryPath)
-            {
-                string remote = Execute(repositoryPath, "remote get-url origin");
-
-                switch (remote)
-                {
-                    case string url when url.Contains("github.com"):
-                        var (owner, repository) = ParseRepositoryUrl(remote);
-                        return new Provider_Github(repository, owner);
-                    case string url when url.Contains("gitlab.com"):
-                        return new Provider_Gitlab();
-                    default:
-                        throw new NotSupportedException("Unsupported remote provider.");
-                }
-            }
-
-            private static (string Owner, string Repository) ParseRepositoryUrl(string url)
-            {
-                url = url.Replace(".git", "", StringComparison.OrdinalIgnoreCase);
-
-                // HTTPS
-                if (Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
-                {
-                    string[] parts = uri.AbsolutePath.Trim('/').Split('/');
-
-                    if (parts.Length >= 2)
-                        return (parts[0], parts[1]);
-                }
-
-                // SSH: git@github.com:owner/repository
-                int colon = url.IndexOf(':');
-                if (colon >= 0)
-                {
-                    string path = url[(colon + 1)..];
-                    string[] parts = path.Split('/');
-
-                    if (parts.Length >= 2)
-                        return (parts[0], parts[1]);
-                }
-
-
-                throw new ArgumentException("Invalid Git repository URL.", nameof(url));
+                string error = process.StandardError.ReadToEnd();
+                throw new Exception($"Git branch failed: {error}");
             }
         }
+
+        /// <summary>
+        /// Perform cherry-pick operation
+        /// </summary>
+        public static void CherryPick(string repositoryPath, string commitHash)
+        {
+            var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "git",
+                    Arguments = $"cherry-pick {commitHash}",
+                    WorkingDirectory = repositoryPath,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+
+            process.Start();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                string error = process.StandardError.ReadToEnd();
+                throw new Exception($"Git cherry-pick failed: {error}");
+            }
+        }
+
+        public static IRepositoryProvider GetProvider(string repositoryPath)
+        {
+            string remote = Execute(repositoryPath, "remote get-url origin");
+
+            switch (remote)
+            {
+                case string url when url.Contains("github.com"):
+                    var (owner, repository) = ParseRepositoryUrl(remote);
+                    return new Provider_Github(repository, owner);
+                case string url when url.Contains("gitlab.com"):
+                    return new Provider_Gitlab();
+                default:
+                    throw new NotSupportedException("Unsupported remote provider.");
+            }
+        }
+
+        private static (string Owner, string Repository) ParseRepositoryUrl(string url)
+        {
+            url = url.Replace(".git", "", StringComparison.OrdinalIgnoreCase);
+
+            // HTTPS
+            if (Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
+            {
+                string[] parts = uri.AbsolutePath.Trim('/').Split('/');
+
+                if (parts.Length >= 2)
+                    return (parts[0], parts[1]);
+            }
+
+            // SSH: git@github.com:owner/repository
+            int colon = url.IndexOf(':');
+            if (colon >= 0)
+            {
+                string path = url[(colon + 1)..];
+                string[] parts = path.Split('/');
+
+                if (parts.Length >= 2)
+                    return (parts[0], parts[1]);
+            }
+
+
+            throw new ArgumentException("Invalid Git repository URL.", nameof(url));
+        }
     }
+}
