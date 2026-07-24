@@ -544,7 +544,7 @@ namespace GitDesktop.Git
             return process.ExitCode;
         }
 
-        private static string ExecuteWithoutRepository(string workingDirectory, string arguments)
+        public static string ExecuteWithoutRepository(string workingDirectory, string arguments)
         {
             Process process = new();
 

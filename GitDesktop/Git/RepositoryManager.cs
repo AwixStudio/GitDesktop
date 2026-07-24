@@ -57,6 +57,8 @@ namespace GitDesktop.Git
                 }
             }
             CurrentRepository = Repositories.FirstOrDefault(r => r.Path == appConfig.LastUsedRepository);
+
+            GitService.ExecuteWithoutRepository(AppContext.BaseDirectory, "lfs install");
         }
 
         private void SaveAppConfig()
