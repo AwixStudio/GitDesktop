@@ -44,7 +44,7 @@ namespace GitDesktop
 
             views.Add(new MainView(repositoryManager));
             views.Add(new ChangesView(repositoryManager));
-            views.Add(new CommitHistoryView(repositoryManager));
+            views.Add(new RightPanelTabbedView(repositoryManager));
         }
 
         public void Run()

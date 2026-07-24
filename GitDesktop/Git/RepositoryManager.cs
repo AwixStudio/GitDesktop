@@ -13,7 +13,8 @@ namespace GitDesktop.Git
 
         private List<Repository> repositories = [];
         public IReadOnlyList<Repository> Repositories => repositories;
-        public Repository? CurrentRepository { get; private set; }        
+        public Repository? CurrentRepository { get; private set; }
+        public GitFile? SelectedFile { get; set; }
 
         public RepositoryManager()
         {
@@ -154,6 +155,8 @@ namespace GitDesktop.Git
 
     public class Repository
     {
+        private const int MAX_COMMITS_PER_PAGE = 100;
+
         public string Name { get; private set; }
         public string Path { get; private set; }
         public string DefaultBranchName { get; private set; }
@@ -168,6 +171,9 @@ namespace GitDesktop.Git
 
         private List<GitCommit> commits = [];
         public IReadOnlyList<GitCommit> Commits => commits;
+
+        private bool hasMoreCommits = false;
+        public bool HasMoreCommits => hasMoreCommits;
 
         public Repository(string name, string path)
         {
@@ -185,10 +191,12 @@ namespace GitDesktop.Git
             try
             {
                 commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+                CheckAndSetHasMoreCommits();
             }
             catch
             {
                 commits = [];
+                hasMoreCommits = false;
             }
 
             Provider = GitService.GetProvider(path);            
@@ -215,10 +223,12 @@ namespace GitDesktop.Git
                     try
                     {
                         commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+                        CheckAndSetHasMoreCommits();
                     }
                     catch
                     {
                         commits = [];
+                        hasMoreCommits = false;
                     }
                 }
                 catch (Exception ex)
@@ -280,10 +290,12 @@ namespace GitDesktop.Git
                 try
                 {
                     commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+                    CheckAndSetHasMoreCommits();
                 }
                 catch
                 {
                     commits = [];
+                    hasMoreCommits = false;
                 }
             }
             catch (Exception ex)
@@ -316,10 +328,12 @@ namespace GitDesktop.Git
                 try
                 {
                     commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+                    CheckAndSetHasMoreCommits();
                 }
                 catch
                 {
                     commits = [];
+                    hasMoreCommits = false;
                 }
             }
             catch (Exception ex)
@@ -347,10 +361,12 @@ namespace GitDesktop.Git
                     try
                     {
                         commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+                        CheckAndSetHasMoreCommits();
                     }
                     catch
                     {
                         commits = [];
+                        hasMoreCommits = false;
                     }
 
                     onProgress("Update completed!", 100);
@@ -406,6 +422,39 @@ namespace GitDesktop.Git
         public void CreatePullRequest()
         {
             Provider.CreatePullRequest(Path, "Title", CurrentBranch.Name, "master");            
+        }
+
+        public void LoadMoreCommits()
+        {
+            try
+            {
+                // Get next batch of commits with offset
+                var nextCommits = GitService.GetCommitLog(Path, CurrentBranch.Name, MAX_COMMITS_PER_PAGE, commits.Count);
+
+                // If we got fewer commits than the limit, there are no more commits available
+                hasMoreCommits = nextCommits.Count >= MAX_COMMITS_PER_PAGE;
+
+                // Add new commits to the list
+                commits.AddRange(nextCommits);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Failed to load more commits: {ex.Message}");
+            }
+        }
+
+        private void CheckAndSetHasMoreCommits()
+        {
+            try
+            {
+                // Check if there are more commits after the current batch
+                var testCommits = GitService.GetCommitLog(Path, CurrentBranch.Name, 1, commits.Count);
+                hasMoreCommits = testCommits.Count > 0;
+            }
+            catch
+            {
+                hasMoreCommits = false;
+            }
         }
     }
 }
