@@ -111,7 +111,13 @@ namespace GitDesktop.Git
                 // Clear last used repository if it was the one being removed
                 if (appConfig.LastUsedRepository == path)                
                     appConfig.LastUsedRepository = null;
-                                
+
+                // If the removed repository was the currently selected one, clear it
+                if (CurrentRepository?.Path == path)
+                {
+                    CurrentRepository = null;
+                }
+
                 SaveAppConfig();
             }
         }

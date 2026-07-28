@@ -18,6 +18,7 @@ namespace GitDesktop.UI
         private readonly MenuItem repositoryMenu_createNew;
         private readonly MenuItem repositoryMenu_gitCmd;
         private readonly MenuItem repositoryMenu_openInExplorer;
+        private readonly MenuItem repositoryMenu_removeFromList;
         private readonly Menu repositoryMenu;
 
         private readonly MenuItem branchMenu_createNew;
@@ -43,6 +44,7 @@ namespace GitDesktop.UI
             repositoryMenu_createNew = new("Create new repository", () => createRepositoryDialog.Open());
             repositoryMenu_gitCmd = new("Open in cmd", () => repositoryManager.CurrentRepository?.OpenInGitCmd());
             repositoryMenu_openInExplorer = new("Open in explorer", () => repositoryManager.CurrentRepository?.OpenInExplorer());
+            repositoryMenu_removeFromList = new("Remove from list", () => RemoveCurrentRepositoryFromList());
 
             repositoryMenu = new("Repository",
             [
@@ -50,7 +52,8 @@ namespace GitDesktop.UI
                 repositoryMenu_clone,
                 repositoryMenu_createNew,
                 repositoryMenu_gitCmd,
-                repositoryMenu_openInExplorer
+                repositoryMenu_openInExplorer,
+                repositoryMenu_removeFromList
             ]);
 
             branchMenu_createNew = new("Create new branch", () => createBranchDialogHelper.Open());
@@ -251,6 +254,14 @@ namespace GitDesktop.UI
             }
 
             ImGui.End();
+        }
+
+        private void RemoveCurrentRepositoryFromList()
+        {
+            if (repositoryManager.CurrentRepository != null)
+            {
+                repositoryManager.RemoveRepository(repositoryManager.CurrentRepository.Path);
+            }
         }
     }
 }

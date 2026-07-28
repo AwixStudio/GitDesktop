@@ -18,7 +18,7 @@ namespace GitDesktop.UI
 
             ImGui.Text("GitDesktop v1.0.0");
             ImGui.Spacing();
-            ImGui.Text("Created by Dawid Plowiec");
+            ImGui.Text("Created by Dawid Płowiec");
 
             ImGui.End();
 
