@@ -45,8 +45,10 @@ namespace GitDesktop.Git
             // Get all branches (local and remote with -a flag)
             string gitBranchCmdResult = Execute(repositoryPath, "branch -a");
             List<GitBranch> branches = [];
-            GitBranch currentBranch = new("main");            
+            GitBranch currentBranch = new("main");
+            HashSet<string> localBranchNames = new();
 
+            // First pass: collect local branches
             foreach (string line in gitBranchCmdResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
                 string branchName = line.TrimStart('*', ' ').Trim();
@@ -56,20 +58,46 @@ namespace GitDesktop.Git
                 if (branchName.Contains("->"))
                     continue;
 
-                // Remove "remotes/" prefix from remote branches for easier display
+                // Only process local branches in this pass
+                if (!branchName.StartsWith("remotes/"))
+                {
+                    GitBranch branch = new(branchName);
+
+                    if (isCurrent)
+                        currentBranch = branch;
+
+                    branches.Add(branch);
+                    localBranchNames.Add(branchName);
+                }
+            }
+
+            // Second pass: add remote branches only if they don't have a local counterpart
+            foreach (string line in gitBranchCmdResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                string branchName = line.TrimStart('*', ' ').Trim();
+
+                // Skip remote HEAD pointers
+                if (branchName.Contains("->"))
+                    continue;
+
+                // Process remote branches
                 if (branchName.StartsWith("remotes/"))
                 {
+                    // Remove "remotes/" prefix, keeping origin/branchname format
                     branchName = branchName.Substring("remotes/".Length);
+
+                    // Extract the branch name without the remote prefix (e.g., "main" from "origin/main")
+                    string localBranchName = branchName.Contains("/") 
+                        ? branchName.Substring(branchName.IndexOf('/') + 1) 
+                        : branchName;
+
+                    // Only add the remote branch if we don't have a local branch with the same name
+                    if (!localBranchNames.Contains(localBranchName))
+                    {
+                        GitBranch branch = new(branchName);
+                        branches.Add(branch);
+                    }
                 }
-
-                GitBranch branch = new(branchName);
-
-                if (isCurrent)                
-                    currentBranch = branch;
-
-                // Avoid duplicates (local branch + remote branch with same name)
-                if (!branches.Any(b => b.Name == branchName))
-                    branches.Add(branch);                
             }
 
             return (branches, currentBranch);
