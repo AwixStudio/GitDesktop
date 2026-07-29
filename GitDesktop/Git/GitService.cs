@@ -18,7 +18,7 @@ namespace GitDesktop.Git
 
         public static GitStatus GetStatus(string repositoryPath)
         {
-            string gitStatusCmdResult = Execute(repositoryPath, "status --porcelain");
+            string gitStatusCmdResult = Execute(repositoryPath, "status --porcelain -uall");
 
             GitStatus status = new();
             foreach (string line in gitStatusCmdResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))

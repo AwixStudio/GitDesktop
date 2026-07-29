@@ -1,0 +1,34 @@
+﻿<Wix 
+  xmlns="http://wixtoolset.org/schemas/v4/wxs"
+  xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package
+      Name="GitDesktop"
+      Manufacturer="Dawid Plowiec"
+      Version="1.0.0"
+      UpgradeCode="{739E89F1-CAD6-47C1-A7C5-13FADBCD306A}">
+
+    <MajorUpgrade
+        DowngradeErrorMessage="A newer version is already installed." />
+
+    <ui:WixUI
+    Id="WixUI_InstallDir"
+    InstallDirectory="INSTALLFOLDER"/>
+
+    <Feature Id="Main">
+      <ComponentGroupRef Id="PublishedFiles"/>
+      <ComponentRef Id="DesktopShortcutComponent"/>
+    </Feature>
+
+  </Package>
+
+  <Fragment>
+    <ComponentGroup Id="PublishedFiles"
+                    Directory="INSTALLFOLDER">
+
+      <Files Include="C:\Users\dplow\Desktop\GitDesktop\**" />
+
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>

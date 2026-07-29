@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Fragment>
+
+    <DirectoryRef Id="DesktopFolder">
+
+      <Component Id="DesktopShortcutComponent" Guid="*">
+
+        <Shortcut
+            Id="DesktopShortcut"
+            Name="GitDesktop"
+            Target="[INSTALLFOLDER]GitDesktop.exe"
+            WorkingDirectory="INSTALLFOLDER" />
+
+        <RegistryValue
+            Root="HKCU"
+            Key="Software\GitDesktop"
+            Name="DesktopShortcut"
+            Type="integer"
+            Value="1"
+            KeyPath="yes"/>
+
+      </Component>
+
+    </DirectoryRef>
+
+  </Fragment>
+
+</Wix>
