@@ -9,6 +9,7 @@ namespace GitDesktop.Git
         private const string APP_CONFIG_FILE_NAME = "app-config.json";
 
         private readonly string appConfigPath;
+        private readonly string appDataDirectory;
         private AppConfig appConfig;
 
         private List<Repository> repositories = [];
@@ -20,7 +21,9 @@ namespace GitDesktop.Git
 
         public RepositoryManager()
         {
-            appConfigPath = Path.Combine(AppContext.BaseDirectory, APP_CONFIG_FILE_NAME);
+            appDataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GitDesktop");
+            Directory.CreateDirectory(appDataDirectory);
+            appConfigPath = Path.Combine(appDataDirectory, APP_CONFIG_FILE_NAME);
             appConfig = new();
             
             LoadAppConfig();
