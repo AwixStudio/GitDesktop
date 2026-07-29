@@ -128,21 +128,22 @@ namespace GitDesktop
         {
             try
             {
-                autoPullPopup = new UpdateProgressPopup("Auto-Pull Progress");
-
                 var repository = repositoryManager.CurrentRepository;
                 if (repository == null)
-                {
-                    if (autoPullPopup != null)
-                    {
-                        ViewManager.RemoveView?.Invoke(autoPullPopup);
-                        autoPullPopup = null;
-                    }
                     return;
-                }
+
+                // First check if there are any updates without showing popup
+                bool hasUpdates = await GitService.HasRemoteUpdates(repository.Path);
+
+                // Only show popup if there are actually updates to pull
+                if (!hasUpdates)
+                    return;
+
+                // Show popup only when we know there are updates
+                autoPullPopup = new UpdateProgressPopup("Auto-Pull Progress");
 
                 // Perform the auto-pull with progress updates
-                bool hadUpdates = await repository.AutoPullFromRemote((status, progress) =>
+                bool pullSuccess = await repository.AutoPullFromRemote((status, progress) =>
                 {
                     if (autoPullPopup != null)
                     {
@@ -150,17 +151,9 @@ namespace GitDesktop
                     }
                 });
 
-                if (hadUpdates)
+                if (pullSuccess && autoPullPopup != null)
                 {
-                    if (autoPullPopup != null)
-                    {
-                        autoPullPopup.Complete();
-                    }
-                }
-                else
-                {
-                    // No updates available, close the popup after a short delay
-                    CloseAutoPullPopupDelayed();
+                    autoPullPopup.Complete();
                 }
             }
             catch (Exception ex)
@@ -169,16 +162,6 @@ namespace GitDesktop
                 {
                     autoPullPopup.Error($"Auto-pull error: {ex.Message}");
                 }
-            }
-        }
-
-        private async void CloseAutoPullPopupDelayed()
-        {
-            await Task.Delay(1000);
-            if (autoPullPopup != null)
-            {
-                ViewManager.RemoveView?.Invoke(autoPullPopup);
-                autoPullPopup = null;
             }
         }
 
