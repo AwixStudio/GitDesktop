@@ -108,6 +108,8 @@ namespace GitDesktop.UI
 
             ImGui.PopStyleVar(2);
 
+            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
+
             Repository? selectedRepository = repositoryManager.CurrentRepository;
             int selectedRepositoryIndex = Array.IndexOf(repositoryManager.GetRepositoryPaths(), selectedRepository?.Path);
             string[] repositoriesNames = repositoryManager.GetRepositoryNames();
@@ -126,7 +128,8 @@ namespace GitDesktop.UI
             ImGui.Combo("##Repository", ref selectedRepositoryIndex, repositoriesNames, repositoriesNames.Length);
             ImGui.EndGroup();
 
-            if(selectedRepositoryIndex != previousSelectedRepository)
+
+            if (selectedRepositoryIndex != previousSelectedRepository)
             {
                 Repository newSelectedRepository = repositoryManager.GetRepository(selectedRepositoryIndex);
                 repositoryManager.SetCurrentRepository(newSelectedRepository);
@@ -139,6 +142,8 @@ namespace GitDesktop.UI
             string[] branchesNames = selectedRepository?.Branches.Select(b => b.Name).ToArray() ?? [];
 
             ImGui.SameLine();
+            ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 3);
+
             ImGui.BeginGroup();
             ImGui.TextUnformatted("Branch");
             ImGui.SetNextItemWidth(branchWidth);
@@ -173,6 +178,7 @@ namespace GitDesktop.UI
             }
 
             ImGui.SameLine(0, 20);
+            ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 4);
 
             if (repositoryManager.CurrentRepository != null)
             {
@@ -240,6 +246,7 @@ namespace GitDesktop.UI
                 ImGui.EndGroup();
 
                 ImGui.SameLine();
+                ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 4);
 
                 // Pull Request button
                 ImGui.BeginGroup();
@@ -249,8 +256,6 @@ namespace GitDesktop.UI
                     repositoryManager.CurrentRepository?.CreatePullRequest();
                 }
                 ImGui.EndGroup();
-
-                ImGui.Separator();
             }
 
             ImGui.End();
