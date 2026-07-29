@@ -711,7 +711,9 @@ namespace GitDesktop.Git
             if (process.ExitCode != 0)
             {
                 string error = process.StandardError.ReadToEnd();
-                throw new Exception($"Git remote branch delete failed: {error}");
+                // Log warning instead of throwing exception
+                // This handles cases where remote branch doesn't exist or network issues
+                Console.WriteLine($"Warning: Could not delete remote branch '{branchName}': {error}");
             }
         }
 
