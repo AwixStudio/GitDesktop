@@ -11,9 +11,12 @@ namespace GitDesktop.UI
         private bool isComplete = false;
         private bool hasError = false;
         private string? errorMessage;
+        private string titleText = "Update Progress";
 
-        public UpdateProgressPopup()
+        public UpdateProgressPopup(string? customTitle = null)
         {
+            if (customTitle != null)
+                titleText = customTitle;
             ViewManager.AddNewView?.Invoke(this);
         }
 
@@ -43,13 +46,13 @@ namespace GitDesktop.UI
         {
             if (!isPopupOpened)
             {
-                ImGui.OpenPopup("Update Progress");
+                ImGui.OpenPopup(titleText);
                 isPopupOpened = true;
             }
 
             ImGui.SetNextWindowSizeConstraints(new Vector2(500, 200), new Vector2(700, 350));
 
-            if (ImGui.BeginPopupModal("Update Progress", ImGuiWindowFlags.AlwaysAutoResize))
+            if (ImGui.BeginPopupModal(titleText, ImGuiWindowFlags.AlwaysAutoResize))
             {
                 ImGui.Text("Updating from main branch...");
                 ImGui.Spacing();

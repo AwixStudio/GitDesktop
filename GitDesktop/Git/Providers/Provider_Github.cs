@@ -1,9 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace GitDesktop.Git.Providers
@@ -21,40 +18,12 @@ namespace GitDesktop.Git.Providers
 
         public void CreatePullRequest(string repositoryPath, string title, string sourceBranch, string targetBranch)
         {
-            Task<string?> task = Task.Run(async () =>
+            string url = $"https://github.com/{owner}/{repositoryName}/compare/{targetBranch}...{sourceBranch}?expand=1";
+
+            Process.Start(new ProcessStartInfo
             {
-                using HttpClient client = new();
-
-                string token = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                client.DefaultRequestHeaders.UserAgent.ParseAdd("GitGui");
-
-                CreatePullRequestRequest request = new()
-                {
-                    Title = title,
-                    Head = sourceBranch,
-                    Base = targetBranch,
-                    Body = ""
-                };
-
-                StringContent content = new(
-                    JsonSerializer.Serialize(request),
-                    Encoding.UTF8,
-                    "application/json");
-
-                HttpResponseMessage response =
-                    await client.PostAsync(
-                        $"https://api.github.com/repos/{owner}/{repositoryName}/pulls",
-                        content);
-
-                string json = await response.Content.ReadAsStringAsync();
-
-                if (!response.IsSuccessStatusCode)
-                    throw new Exception(json);
-
-                PullRequestResponse? pr = JsonSerializer.Deserialize<PullRequestResponse>(json);
-
-                return pr?.Url;
+                FileName = url,
+                UseShellExecute = true
             });
         }
 

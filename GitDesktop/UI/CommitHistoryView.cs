@@ -11,6 +11,7 @@ namespace GitDesktop.UI
         private int selectedCommitIndex = -1;
         private string selectedCommitDetails = string.Empty;
         private CommitContextMenuHelper contextMenuHelper;
+        private float loadMoreButtonHeight = 35f;
 
         public CommitHistoryView(RepositoryManager repositoryManager)
         {
@@ -53,7 +54,7 @@ namespace GitDesktop.UI
             ImGui.Separator();
 
             // Container for the commits list with fixed height
-            if (ImGui.BeginChild("CommitsListContainer", new System.Numerics.Vector2(-1, -5f)))
+            if (ImGui.BeginChild("CommitsListContainer", new System.Numerics.Vector2(-1, -loadMoreButtonHeight)))
             {
                 if (ImGui.BeginTable("###CommitsList", 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingFixedFit))
                 {
@@ -116,9 +117,114 @@ namespace GitDesktop.UI
                 ImGui.EndChild();
             }
 
+            // Load More button - only show if max commits loaded and more are available
+            if (commits.Count >= 100 && currentRepository.HasMoreCommits)
+            {
+                if (ImGui.Button("Load More Commits", new System.Numerics.Vector2(-1, 30)))
+                {
+                    currentRepository.LoadMoreCommits();
+                }
+            }
+
             contextMenuHelper.RenderCreateBranchDialog();
 
             ImGui.End();
+        }
+
+        public void RenderContent()
+        {
+            Repository? currentRepository = repositoryManager.CurrentRepository;
+            if (currentRepository == null)
+            {
+                ImGui.TextDisabled("No repository selected");
+                return;
+            }
+
+            var commits = currentRepository.Commits;
+
+            if (commits.Count == 0)
+            {
+                ImGui.TextDisabled("No commits to display");
+                return;
+            }
+
+            ImGui.Text($"Commits: {commits.Count}");
+            ImGui.Separator();
+
+            // Container for the commits list with fixed height
+            if (ImGui.BeginChild("CommitsListContainer", new System.Numerics.Vector2(-1, -loadMoreButtonHeight)))
+            {
+                if (ImGui.BeginTable("###CommitsList", 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingFixedFit))
+                {
+                    ImGui.TableSetupColumn("Hash", ImGuiTableColumnFlags.WidthFixed, 80);
+                    ImGui.TableSetupColumn("Author", ImGuiTableColumnFlags.WidthFixed, 120);
+                    ImGui.TableSetupColumn("Date", ImGuiTableColumnFlags.WidthFixed, 150);
+                    ImGui.TableSetupColumn("Message", ImGuiTableColumnFlags.WidthStretch);
+                    ImGui.TableHeadersRow();
+
+                    int commitIndex = 0;
+                    foreach (var commit in commits)
+                    {
+                        ImGui.TableNextRow();
+
+                        // Hash column
+                        ImGui.TableSetColumnIndex(0);
+                        string shortHash = commit.Hash.Length > 7 ? commit.Hash.Substring(0, 7) : commit.Hash;
+                        ImGui.PushID($"commit_{commit.Hash}");
+                        if (ImGui.Selectable(shortHash, selectedCommitIndex == commitIndex, ImGuiSelectableFlags.SpanAllColumns))
+                        {
+                            selectedCommitIndex = commitIndex;
+                            UpdateSelectedCommitDetails(commit);
+                        }
+
+                        if (ImGui.BeginPopupContextItem("##CommitContextMenu"))
+                        {
+                            if (ImGui.MenuItem("Create branch from this commit"))
+                            {
+                                contextMenuHelper.ShowCreateBranchDialog(commit.Hash);
+                            }
+
+                            if (ImGui.MenuItem("Cherry-pick"))
+                            {
+                                contextMenuHelper.PerformCherryPickPublic(commit.Hash);
+                            }
+
+                            ImGui.EndPopup();
+                        }
+
+                        ImGui.PopID();
+
+                        // Author column
+                        ImGui.TableSetColumnIndex(1);
+                        ImGui.TextUnformatted(commit.Author);
+
+                        // Date column
+                        ImGui.TableSetColumnIndex(2);
+                        ImGui.TextUnformatted(commit.Date.ToString("yyyy-MM-dd HH:mm"));
+
+                        // Message column
+                        ImGui.TableSetColumnIndex(3);
+                        string message = commit.Message.Length > 50 ? commit.Message.Substring(0, 50) + "..." : commit.Message;
+                        ImGui.TextUnformatted(message);
+
+                        commitIndex++;
+                    }
+
+                    ImGui.EndTable();
+                }
+                ImGui.EndChild();
+            }
+
+            // Load More button - only show if max commits loaded and more are available
+            if (commits.Count >= 100 && currentRepository.HasMoreCommits)
+            {
+                if (ImGui.Button("Load More Commits", new System.Numerics.Vector2(-1, 30)))
+                {
+                    currentRepository.LoadMoreCommits();
+                }
+            }
+
+            contextMenuHelper.RenderCreateBranchDialog();
         }
 
         private void UpdateSelectedCommitDetails(GitCommit commit)

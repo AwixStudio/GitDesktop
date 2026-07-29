@@ -13,7 +13,8 @@ namespace GitDesktop.Git
 
         private List<Repository> repositories = [];
         public IReadOnlyList<Repository> Repositories => repositories;
-        public Repository? CurrentRepository { get; private set; }        
+        public Repository? CurrentRepository { get; private set; }
+        public GitFile? SelectedFile { get; set; }
 
         public RepositoryManager()
         {
@@ -57,6 +58,8 @@ namespace GitDesktop.Git
                 }
             }
             CurrentRepository = Repositories.FirstOrDefault(r => r.Path == appConfig.LastUsedRepository);
+
+            GitService.ExecuteWithoutRepository(AppContext.BaseDirectory, "lfs install");
         }
 
         private void SaveAppConfig()
@@ -108,7 +111,13 @@ namespace GitDesktop.Git
                 // Clear last used repository if it was the one being removed
                 if (appConfig.LastUsedRepository == path)                
                     appConfig.LastUsedRepository = null;
-                                
+
+                // If the removed repository was the currently selected one, clear it
+                if (CurrentRepository?.Path == path)
+                {
+                    CurrentRepository = null;
+                }
+
                 SaveAppConfig();
             }
         }
@@ -152,8 +161,11 @@ namespace GitDesktop.Git
 
     public class Repository
     {
+        private const int MAX_COMMITS_PER_PAGE = 100;
+
         public string Name { get; private set; }
         public string Path { get; private set; }
+        public string DefaultBranchName { get; private set; }
         public GitBranch CurrentBranch { get; private set; }
         internal IRepositoryProvider Provider { get; private set; }
 
@@ -166,10 +178,14 @@ namespace GitDesktop.Git
         private List<GitCommit> commits = [];
         public IReadOnlyList<GitCommit> Commits => commits;
 
+        private bool hasMoreCommits = false;
+        public bool HasMoreCommits => hasMoreCommits;
+
         public Repository(string name, string path)
         {
             Name = name;
             Path = path;
+            DefaultBranchName = GitService.GetDefaultBranchName(path);
 
             (var branches, var currentBranch) = GitService.GetBranches(path);
             CurrentBranch = currentBranch;
@@ -181,13 +197,15 @@ namespace GitDesktop.Git
             try
             {
                 commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+                CheckAndSetHasMoreCommits();
             }
             catch
             {
                 commits = [];
+                hasMoreCommits = false;
             }
 
-            Provider = GitService.GetProvider(path);
+            Provider = GitService.GetProvider(path);            
         }
 
         public void ChangeBranch(GitBranch newBranch)
@@ -211,10 +229,12 @@ namespace GitDesktop.Git
                     try
                     {
                         commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+                        CheckAndSetHasMoreCommits();
                     }
                     catch
                     {
                         commits = [];
+                        hasMoreCommits = false;
                     }
                 }
                 catch (Exception ex)
@@ -276,10 +296,12 @@ namespace GitDesktop.Git
                 try
                 {
                     commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+                    CheckAndSetHasMoreCommits();
                 }
                 catch
                 {
                     commits = [];
+                    hasMoreCommits = false;
                 }
             }
             catch (Exception ex)
@@ -312,10 +334,12 @@ namespace GitDesktop.Git
                 try
                 {
                     commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+                    CheckAndSetHasMoreCommits();
                 }
                 catch
                 {
                     commits = [];
+                    hasMoreCommits = false;
                 }
             }
             catch (Exception ex)
@@ -324,36 +348,72 @@ namespace GitDesktop.Git
             }
         }
 
-        public async Task UpdateFromMain(Action<string, float> onProgress)
+        public async Task<MergeConflictResult> UpdateFromMain(Action<string, float> onProgress)
         {
             try
             {
-                await GitService.UpdateFromMain(Path, onProgress);
+                var result = await GitService.UpdateFromMain(Path, onProgress);
 
-                // Refresh status after update
-                onProgress("Refreshing file status...", 97);
-                GitStatus status = GitService.GetStatus(Path);
-                RefreshChanges(status.Files);
-
-                // Refresh commits
-                onProgress("Refreshing commit history...", 99);
-                try
+                // If no conflicts, proceed with refresh
+                if (!result.HasConflicts)
                 {
-                    commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
-                }
-                catch
-                {
-                    commits = [];
+                    // Refresh status after update
+                    onProgress("Refreshing file status...", 97);
+                    GitStatus status = GitService.GetStatus(Path);
+                    RefreshChanges(status.Files);
+
+                    // Refresh commits
+                    onProgress("Refreshing commit history...", 99);
+                    try
+                    {
+                        commits = GitService.GetCommitLog(Path, CurrentBranch.Name);
+                        CheckAndSetHasMoreCommits();
+                    }
+                    catch
+                    {
+                        commits = [];
+                        hasMoreCommits = false;
+                    }
+
+                    onProgress("Update completed!", 100);
+
+                    // Refresh branches after update (new branches might have been fetched)
+                    RefreshBranches();
                 }
 
-                onProgress("Update completed!", 100);
-
-                // Refresh branches after update (new branches might have been fetched)
-                RefreshBranches();
+                return result;
             }
             catch (Exception ex)
             {
                 throw new InvalidOperationException($"Failed to update from main: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Performs an auto-pull if there are remote updates available.
+        /// This is called when the application gains focus.
+        /// </summary>
+        public async Task<bool> AutoPullFromRemote(Action<string, float> onProgress)
+        {
+            try
+            {
+                // Check if there are updates to pull
+                bool hasUpdates = await GitService.HasRemoteUpdates(Path);
+
+                if (!hasUpdates)
+                {
+                    return false;
+                }
+
+                // Perform the update/pull
+                await UpdateFromMain(onProgress);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                onProgress($"Auto-pull failed: {ex.Message}", 0);
+                Logger.Log($"Auto-pull failed: {ex.Message}");
+                return false;
             }
         }
 
@@ -384,9 +444,51 @@ namespace GitDesktop.Git
             });
         }
 
+        public void OpenInExplorer()
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = Path,
+                UseShellExecute = true
+            });
+        }
+
         public void CreatePullRequest()
         {
-            Provider.CreatePullRequest(Path, "Title", CurrentBranch.Name, "main");            
+            Provider.CreatePullRequest(Path, "Title", CurrentBranch.Name, "master");            
+        }
+
+        public void LoadMoreCommits()
+        {
+            try
+            {
+                // Get next batch of commits with offset
+                var nextCommits = GitService.GetCommitLog(Path, CurrentBranch.Name, MAX_COMMITS_PER_PAGE, commits.Count);
+
+                // If we got fewer commits than the limit, there are no more commits available
+                hasMoreCommits = nextCommits.Count >= MAX_COMMITS_PER_PAGE;
+
+                // Add new commits to the list
+                commits.AddRange(nextCommits);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Failed to load more commits: {ex.Message}");
+            }
+        }
+
+        private void CheckAndSetHasMoreCommits()
+        {
+            try
+            {
+                // Check if there are more commits after the current batch
+                var testCommits = GitService.GetCommitLog(Path, CurrentBranch.Name, 1, commits.Count);
+                hasMoreCommits = testCommits.Count > 0;
+            }
+            catch
+            {
+                hasMoreCommits = false;
+            }
         }
     }
 }

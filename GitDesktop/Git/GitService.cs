@@ -1,13 +1,21 @@
 ﻿using GitDesktop.Git.Providers;
+using RestSharp;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 
 namespace GitDesktop.Git
 {
     internal class GitService
     {
+        private static string gitExe = Path.Combine(
+            AppContext.BaseDirectory,
+            "GitPortable",
+            "cmd",
+            "git.exe");
+
         public static GitStatus GetStatus(string repositoryPath)
         {
             string gitStatusCmdResult = Execute(repositoryPath, "status --porcelain");
@@ -88,6 +96,96 @@ namespace GitDesktop.Git
         public static void HardReset(string repositoryPath)
         {
             Execute(repositoryPath, "reset --hard HEAD");
+            Execute(repositoryPath, "git clean -fd");
+        }
+
+        public static async Task CloneAsync(string repositoryUrl, string destinationPath, Action<string>? onProgress = null)
+        {
+            // Ensure parent directory exists
+            string parentDirectory = Path.GetDirectoryName(destinationPath) ?? destinationPath;
+            if (!Directory.Exists(parentDirectory))
+            {
+                Directory.CreateDirectory(parentDirectory);
+            }
+
+            string arguments = $@"clone ""{repositoryUrl}"" ""{destinationPath}""";
+
+            int exitCode = await ExecuteAsync(parentDirectory, arguments, onProgress);
+
+            if (exitCode != 0)
+                throw new InvalidOperationException($"Git clone failed with exit code {exitCode}");
+        }
+
+        public static void InitRepository(string repositoryPath, string branchName = "main")
+        {
+            // Ensure directory exists
+            if (!Directory.Exists(repositoryPath))
+            {
+                Directory.CreateDirectory(repositoryPath);
+            }
+
+            // Initialize git repository
+            Execute(repositoryPath, "init");
+
+            // Set default branch name using config (works before first commit)
+            try
+            {
+                Execute(repositoryPath, $"config init.defaultBranch {branchName}");
+            }
+            catch
+            {
+                // If config fails, ignore - symbolic-ref will be set after first commit
+            }
+
+            // Create initial commit or README
+            try
+            {
+                string readmePath = Path.Combine(repositoryPath, "README.md");
+                File.WriteAllText(readmePath, $"# {Path.GetFileName(repositoryPath)}\n\nInitial repository\n");
+
+                Execute(repositoryPath, "add README.md");
+                Execute(repositoryPath, "config user.email \"info@example.com\"");
+                Execute(repositoryPath, "config user.name \"Local User\"");
+                Execute(repositoryPath, $"commit -m \"Initial commit\"");
+
+                // Set symbolic-ref after first commit succeeds
+                try
+                {
+                    Execute(repositoryPath, $"symbolic-ref HEAD refs/heads/{branchName}");
+                }
+                catch { }
+            }
+            catch
+            {
+                // If commit fails, repository is still initialized but empty
+            }
+        }
+
+        public static string GetDefaultBranchName(string repositoryPath)
+        {
+            try
+            {
+                // Try to get default branch from remote origin (works for cloned repos)
+                string gitDefaultBranchCmdResult = Execute(repositoryPath, "symbolic-ref --short refs/remotes/origin/HEAD");
+                string defaultBranch = gitDefaultBranchCmdResult.Trim().Split('/').Last();
+                return defaultBranch;
+            }
+            catch
+            {
+                // Fallback for local repos without remote: get current branch
+                try
+                {
+                    string currentBranch = Execute(repositoryPath, "rev-parse --abbrev-ref HEAD").Trim();
+                    if (!string.IsNullOrWhiteSpace(currentBranch) && currentBranch != "HEAD")
+                    {
+                        return currentBranch;
+                    }
+                }
+                catch { }
+
+                // Ultimate fallback: return "main"
+                return "main";
+            }
         }
 
         public static List<GitCommit> GetCommitLog(string repositoryPath, string branchName, int limit = 100)
@@ -116,7 +214,68 @@ namespace GitDesktop.Git
             return commits;
         }
 
-        public static async Task UpdateFromMain(string repositoryPath, Action<string, float> onProgress)
+        public static List<GitCommit> GetCommitLog(string repositoryPath, string branchName, int limit, int offset)
+        {
+            string gitLogCmd = "log " + branchName + " --pretty=format:\\\"" + "%H|%an|%ai|%s|%P" + "\\\" --max-count=" + (limit + 1) + " --skip=" + offset;
+            string gitLogCmdResult = Execute(repositoryPath, gitLogCmd);
+
+            List<GitCommit> commits = [];
+            int count = 0;
+            foreach (string line in gitLogCmdResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (count >= limit)
+                    break;
+
+                var parts = line.Split('|');
+                if (parts.Length >= 5)
+                {
+                    string hash = parts[0].Trim();
+                    string author = parts[1].Trim();
+                    if (DateTime.TryParse(parts[2].Trim(), out DateTime date))
+                    {
+                        string message = parts[3].Trim();
+                        string parentHash = parts[4].Trim().Split(' ').FirstOrDefault() ?? "";
+
+                        commits.Add(new GitCommit(hash, author, date, message, parentHash));
+                        count++;
+                    }
+                }
+            }
+
+            return commits;
+        }
+
+        public static async Task<bool> HasRemoteUpdates(string repositoryPath)
+        {
+            try
+            {
+                // Fetch without pulling to check if there are updates
+                await ExecuteAsync(repositoryPath, "fetch origin");
+
+                // Get current branch name
+                string currentBranch = Execute(repositoryPath, "rev-parse --abbrev-ref HEAD").Trim();
+
+                // Check if local branch is behind remote
+                string behindOutput = Execute(repositoryPath, $"rev-list --left-right --count {currentBranch}...origin/{currentBranch}").Trim();
+
+                if (string.IsNullOrEmpty(behindOutput))
+                    return false;
+
+                var counts = behindOutput.Split('\t');
+                if (counts.Length == 2 && int.TryParse(counts[1], out int remoteAhead))
+                {
+                    return remoteAhead > 0;
+                }
+
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static async Task<MergeConflictResult> UpdateFromMain(string repositoryPath, Action<string, float> onProgress)
         {
             onProgress("Fetching...", 5);
 
@@ -132,7 +291,7 @@ namespace GitDesktop.Git
 
             exit = await ExecuteAsync(
                 repositoryPath,
-                "merge origin/main",
+                "merge origin/" + GetDefaultBranchName(repositoryPath),
                 onOutput: (message) => 
                 {
                     if (message.Contains('%'))
@@ -153,10 +312,34 @@ namespace GitDesktop.Git
                     }
                 });
 
+            // Check if merge resulted in conflicts
             if (exit != 0)
-                throw new Exception("Merge failed.");
+            {
+                // Merge failed - check if it's due to conflicts
+                var conflictedFiles = GetConflictedFiles(repositoryPath);
+
+                if (conflictedFiles.Count > 0)
+                {
+                    // Merge conflicts detected
+                    onProgress("Merge conflicts detected. Waiting for user resolution.", 95);
+
+                    return new MergeConflictResult
+                    {
+                        ConflictedFiles = conflictedFiles,
+                        ErrorMessage = "Merge conflicts detected. Please resolve them."
+                    };
+                }
+                else
+                {
+                    // Other merge error
+                    throw new Exception("Merge failed.");
+                }
+            }
 
             onProgress("Merging done.", 95);
+
+            // No conflicts, merge successful
+            return new MergeConflictResult { ConflictedFiles = [] };
         }
 
         public static string GetFileDiff(string repositoryPath, string filePath)
@@ -187,30 +370,159 @@ namespace GitDesktop.Git
             }
         }
 
+        public static List<ConflictedFile> GetConflictedFiles(string repositoryPath)
+        {
+            var conflictedFiles = new List<ConflictedFile>();
+
+            try
+            {
+                // Use git ls-files -u which shows exactly the unmerged files during a merge conflict
+                // Output format: [stage] [hash] [path]
+                string lsFilesResult = Execute(repositoryPath, "ls-files -u");
+                var uniquePaths = new HashSet<string>();
+
+                foreach (string line in lsFilesResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var parts = line.Split('\t');
+                    if (parts.Length > 1)
+                    {
+                        string filePath = parts[1];
+                        // Add each unique file path only once
+                        if (uniquePaths.Add(filePath))
+                        {
+                            conflictedFiles.Add(new ConflictedFile { Path = filePath });
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback: try git status --porcelain if ls-files fails
+                try
+                {
+                    string gitStatusResult = Execute(repositoryPath, "status --porcelain");
+
+                    foreach (string line in gitStatusResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        if (line.Length < 3)
+                            continue;
+
+                        // During merge conflicts, status shows: UU, AA, DD, UD, AU, etc.
+                        // where U = Unmerged, and both positions indicate unmerged state
+                        string statusCode = line.Substring(0, 2);
+
+                        // Both characters must be non-space and one must be U (unmerged)
+                        if (statusCode[0] == 'U' || statusCode[1] == 'U')
+                        {
+                            string filePath = line.Substring(3);
+                            conflictedFiles.Add(new ConflictedFile { Path = filePath });
+                        }
+                    }
+                }
+                catch
+                {
+                    // If all else fails, return empty list
+                }
+            }
+
+            return conflictedFiles;
+        }
+
+        public static void ResolveConflict(string repositoryPath, string filePath, string strategy)
+        {
+            // strategy should be "ours" (--ours) or "theirs" (--theirs)
+            if (strategy != "ours" && strategy != "theirs")
+                throw new ArgumentException("Strategy must be 'ours' or 'theirs'", nameof(strategy));
+
+            string cmd = $"checkout --{strategy} -- \"{filePath}\"";
+            Execute(repositoryPath, cmd);
+
+            // Stage the resolved file
+            Execute(repositoryPath, $"add \"{filePath}\"");
+        }
+
+        public static void CompleteMerge(string repositoryPath, string commitMessage)
+        {
+            // Complete the merge by committing
+            Execute(repositoryPath, $"commit -m \"{commitMessage}\"");
+        }
+
+        public static void AbortMerge(string repositoryPath)
+        {
+            // Abort the merge process
+            Execute(repositoryPath, "merge --abort");
+        }
+
         public static void DiscardChanges(string repositoryPath, List<GitFile> files)
         {
-            var selectedFiles = files
-                .Where(f => f.MarkedForCommit)
-                .Select(f => $"\"{f.Path}\"");
-            string arguments = "checkout -- " + string.Join(' ', selectedFiles);
-            Execute(repositoryPath, arguments);
+            var selected = files.Where(f => f.MarkedForCommit).ToList();
+
+            // Usuń pliki nieśledzone
+            ExecuteForFiles(
+                repositoryPath,
+                "clean -f --",
+                selected.Where(f =>
+                    f.IndexState == GitFileState.Untracked &&
+                    f.WorkingTreeState == GitFileState.Untracked));
+
+            // Usuń ze stage tylko pliki, które są faktycznie zindeksowane
+            ExecuteForFiles(
+                repositoryPath,
+                "restore --staged --",
+                selected.Where(f =>
+                    f.IndexState != GitFileState.Unmodified &&
+                    f.IndexState != GitFileState.Untracked));
+
+            // Przywróć zawartość plików istniejących w repozytorium
+            ExecuteForFiles(
+                repositoryPath,
+                "restore --",
+                selected.Where(f =>
+                    f.WorkingTreeState != GitFileState.Unmodified &&
+                    f.WorkingTreeState != GitFileState.Untracked));
+        }
+
+        private static void ExecuteForFiles(
+            string repositoryPath,
+            string command,
+            IEnumerable<GitFile> files)
+        {
+            var paths = files
+                .Select(f => $"\"{f.Path.Trim('"')}\"")
+                .ToList();
+
+            if (paths.Count == 0)
+                return;
+
+            Execute(repositoryPath, $"{command} {string.Join(' ', paths)}");
         }
 
         private static string Execute(string repositoryPath, string arguments)
         {
             Process process = new();
-            process.StartInfo.FileName = "git";
+            process.StartInfo.FileName = gitExe;
             process.StartInfo.Arguments = arguments;
             process.StartInfo.WorkingDirectory = repositoryPath;
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.CreateNoWindow = true;
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.StandardOutputEncoding = Encoding.UTF8;
+            process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.StandardErrorEncoding = Encoding.UTF8;
             process.Start();
+
             string output = process.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
+
             process.WaitForExit();
 
             if (process.ExitCode != 0)
-                throw new InvalidOperationException($"Git command failed with exit code {process.ExitCode}");
+            {
+                Console.WriteLine(arguments);
+                throw new InvalidOperationException(
+                    $"Git exited with code {process.ExitCode}\n{error}");
+            }
 
             return output;
         }
@@ -219,7 +531,7 @@ namespace GitDesktop.Git
         {
             using Process process = new();
 
-            process.StartInfo.FileName = "git";
+            process.StartInfo.FileName = gitExe;
             process.StartInfo.Arguments = arguments;
             process.StartInfo.Environment["GIT_TRACE2_EVENT"] = "-";
             process.StartInfo.WorkingDirectory = repositoryPath;
@@ -228,7 +540,9 @@ namespace GitDesktop.Git
             process.StartInfo.CreateNoWindow = true;
 
             process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.StandardOutputEncoding = Encoding.UTF8;
             process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.StandardErrorEncoding = Encoding.UTF8;
 
             process.EnableRaisingEvents = true;
 
@@ -259,65 +573,92 @@ namespace GitDesktop.Git
 
             return process.ExitCode;
         }
-            /// <summary>
-            /// Create a new branch from a specific commit
-            /// </summary>
-            public static void CreateBranch(string repositoryPath, string branchName, string commitHash)
+
+        public static string ExecuteWithoutRepository(string workingDirectory, string arguments)
+        {
+            Process process = new();
+
+            process.StartInfo.FileName = gitExe;
+            process.StartInfo.Arguments = arguments;
+            process.StartInfo.WorkingDirectory = workingDirectory;
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.StandardOutputEncoding = Encoding.UTF8;
+            process.StartInfo.StandardErrorEncoding = Encoding.UTF8;
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.CreateNoWindow = true;
+
+            process.Start();
+
+            string output = process.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
+
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException(error);
+
+            return output;
+        }
+
+        public static void CreateBranch(string repositoryPath, string branchName, string commitHash)
+        {
+            var process = new Process
             {
-                var process = new Process
+                StartInfo = new ProcessStartInfo
                 {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "git",
-                        Arguments = $"branch {branchName} {commitHash}",
-                        WorkingDirectory = repositoryPath,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-
-                process.Start();
-                process.WaitForExit();
-
-                if (process.ExitCode != 0)
-                {
-                    string error = process.StandardError.ReadToEnd();
-                    throw new Exception($"Git branch failed: {error}");
+                    FileName = "git",
+                    Arguments = $"branch {branchName} {commitHash}",
+                    WorkingDirectory = repositoryPath,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
                 }
-            }
+            };
 
-            /// <summary>
-            /// Perform cherry-pick operation
-            /// </summary>
-            public static void CherryPick(string repositoryPath, string commitHash)
+            process.Start();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
             {
-                var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "git",
-                        Arguments = $"cherry-pick {commitHash}",
-                        WorkingDirectory = repositoryPath,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-
-                process.Start();
-                process.WaitForExit();
-
-                if (process.ExitCode != 0)
-                {
-                    string error = process.StandardError.ReadToEnd();
-                    throw new Exception($"Git cherry-pick failed: {error}");
-                }
+                string error = process.StandardError.ReadToEnd();
+                throw new Exception($"Git branch failed: {error}");
             }
+        }
 
-            public static IRepositoryProvider GetProvider(string repositoryPath)
+        /// <summary>
+        /// Perform cherry-pick operation
+        /// </summary>
+        public static void CherryPick(string repositoryPath, string commitHash)
+        {
+            var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "git",
+                    Arguments = $"cherry-pick {commitHash}",
+                    WorkingDirectory = repositoryPath,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+
+            process.Start();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                string error = process.StandardError.ReadToEnd();
+                throw new Exception($"Git cherry-pick failed: {error}");
+            }
+        }
+
+        public static IRepositoryProvider GetProvider(string repositoryPath)
+        {
+            try
             {
                 string remote = Execute(repositoryPath, "remote get-url origin");
 
@@ -332,34 +673,176 @@ namespace GitDesktop.Git
                         throw new NotSupportedException("Unsupported remote provider.");
                 }
             }
-
-            private static (string Owner, string Repository) ParseRepositoryUrl(string url)
+            catch
             {
-                // Remove trailing ".git"
-                if (url.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
-                    url = url[..^4];
+                // Return null provider for local repositories without remote
+                return new Provider_Local();
+            }
+        }
 
-                // HTTPS
-                if (Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
+        private static (string Owner, string Repository) ParseRepositoryUrl(string url)
+        {
+            url = url.Replace(".git", "", StringComparison.OrdinalIgnoreCase);
+
+            // HTTPS
+            if (Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
+            {
+                string[] parts = uri.AbsolutePath.Trim('/').Split('/');
+
+                if (parts.Length >= 2)
+                    return (parts[0], parts[1]);
+            }
+
+            // SSH: git@github.com:owner/repository
+            int colon = url.IndexOf(':');
+            if (colon >= 0)
+            {
+                string path = url[(colon + 1)..];
+                string[] parts = path.Split('/');
+
+                if (parts.Length >= 2)
+                    return (parts[0], parts[1]);
+            }
+
+
+            throw new ArgumentException("Invalid Git repository URL.", nameof(url));
+        }
+
+        /// <summary>
+        /// Creates a new repository on GitHub using the GitHub API.
+        /// Requires Git Credential Manager to have GitHub credentials stored.
+        /// </summary>
+        public static (string repoUrl, string cloneUrl) CreateRepositoryOnGitHub(string repositoryName, string description = "", bool isPrivate = false)
+        {
+            // Get GitHub token from git credential manager
+            string token = GetGitHubToken();
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                throw new InvalidOperationException("GitHub authentication failed. Please ensure Git Credential Manager has GitHub credentials stored.");
+            }
+
+            // Get GitHub username
+            string username = GetGitHubUsername(token);
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                throw new InvalidOperationException("Could not retrieve GitHub username.");
+            }
+
+            // Create repository using GitHub API
+            var client = new RestClient("https://api.github.com");
+            var request = new RestRequest("/user/repos", Method.Post);
+
+            // Add authentication header
+            request.AddHeader("Authorization", $"token {token}");
+            request.AddHeader("Accept", "application/vnd.github.v3+json");
+            request.AddHeader("User-Agent", "GitDesktop");
+
+            // Add request body
+            var body = new
+            {
+                name = repositoryName,
+                description = description ?? "",
+                @private = isPrivate,
+                auto_init = true
+            };
+
+            request.AddJsonBody(body);
+
+            var response = client.Execute(request);
+
+            if (!response.IsSuccessful)
+            {
+                throw new InvalidOperationException($"Failed to create repository on GitHub: {response.Content}");
+            }
+
+            // Parse response to get clone URL
+            using (JsonDocument doc = JsonDocument.Parse(response.Content))
+            {
+                JsonElement root = doc.RootElement;
+                string cloneUrl = root.GetProperty("clone_url").GetString();
+                string htmlUrl = root.GetProperty("html_url").GetString();
+
+                return (htmlUrl, cloneUrl);
+            }
+        }
+
+        /// <summary>
+        /// Gets GitHub token from git credential manager.
+        /// </summary>
+        private static string GetGitHubToken()
+        {
+            try
+            {
+                // Use git credential helper to get token from Git Credential Manager
+                string credentialUrl = "https://github.com";
+                var processInfo = new ProcessStartInfo
                 {
-                    string[] parts = uri.AbsolutePath.Trim('/').Split('/');
+                    FileName = gitExe,
+                    Arguments = "credential fill",
+                    UseShellExecute = false,
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                };
 
-                    if (parts.Length >= 2)
-                        return (parts[0], parts[1]);
+                using (var process = Process.Start(processInfo))
+                {
+                    // Send protocol and host
+                    process.StandardInput.WriteLine($"protocol=https");
+                    process.StandardInput.WriteLine($"host=github.com");
+                    process.StandardInput.WriteLine();
+                    process.StandardInput.Close();
+
+                    string output = process.StandardOutput.ReadToEnd();
+                    process.WaitForExit();
+
+                    // Parse output to get password (token)
+                    foreach (string line in output.Split('\n'))
+                    {
+                        if (line.StartsWith("password="))
+                        {
+                            return line.Replace("password=", "").Trim();
+                        }
+                    }
                 }
 
-                // SSH: git@github.com:owner/repository
-                int colon = url.IndexOf(':');
-                if (colon >= 0)
-                {
-                    string path = url[(colon + 1)..];
-                    string[] parts = path.Split('/');
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
-                    if (parts.Length >= 2)
-                        return (parts[0], parts[1]);
+        /// <summary>
+        /// Gets GitHub username using the API token.
+        /// </summary>
+        private static string GetGitHubUsername(string token)
+        {
+            try
+            {
+                var client = new RestClient("https://api.github.com");
+                var request = new RestRequest("/user", Method.Get);
+                request.AddHeader("Authorization", $"token {token}");
+                request.AddHeader("User-Agent", "GitDesktop");
+
+                var response = client.Execute(request);
+
+                if (response.IsSuccessful)
+                {
+                    using (JsonDocument doc = JsonDocument.Parse(response.Content))
+                    {
+                        JsonElement root = doc.RootElement;
+                        return root.GetProperty("login").GetString();
+                    }
                 }
 
-                throw new ArgumentException("Invalid Git repository URL.", nameof(url));
+                return null;
+            }
+            catch
+            {
+                return null;
             }
         }
     }
+}
