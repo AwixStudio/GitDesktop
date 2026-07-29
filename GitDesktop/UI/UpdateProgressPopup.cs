@@ -6,17 +6,20 @@ namespace GitDesktop.UI
     internal class UpdateProgressPopup : IRender
     {
         private bool isPopupOpened = false;
+        private bool isClosed = false;
         private string currentStatus = "Starting update...";
         private float progress = 0f;
         private bool isComplete = false;
         private bool hasError = false;
         private string? errorMessage;
         private string titleText = "Update Progress";
+        private Action? onClosed;
 
-        public UpdateProgressPopup(string? customTitle = null)
+        public UpdateProgressPopup(string? customTitle = null, Action? onClosedCallback = null)
         {
             if (customTitle != null)
                 titleText = customTitle;
+            onClosed = onClosedCallback;
             ViewManager.AddNewView?.Invoke(this);
         }
 
@@ -44,6 +47,10 @@ namespace GitDesktop.UI
 
         public void Render()
         {
+            // Don't render if already closed
+            if (isClosed)
+                return;
+
             if (!isPopupOpened)
             {
                 ImGui.OpenPopup(titleText);
@@ -52,8 +59,17 @@ namespace GitDesktop.UI
 
             ImGui.SetNextWindowSizeConstraints(new Vector2(500, 200), new Vector2(700, 350));
 
-            if (ImGui.BeginPopupModal(titleText, ImGuiWindowFlags.AlwaysAutoResize))
+            bool isOpen = true;
+            if (ImGui.BeginPopupModal(titleText, ref isOpen, ImGuiWindowFlags.AlwaysAutoResize))
             {
+                // Check if user closed the popup via X button
+                if (!isOpen)
+                {
+                    ImGui.EndPopup();
+                    Close();
+                    return;
+                }
+
                 ImGui.Text("Updating from main branch...");
                 ImGui.Spacing();
 
@@ -76,14 +92,18 @@ namespace GitDesktop.UI
                 {
                     if (ImGui.Button("Close", new Vector2(150, 0)))
                     {
+                        ImGui.EndPopup();
                         Close();
+                        return;
                     }
                 }
                 else if (hasError)
                 {
                     if (ImGui.Button("Close", new Vector2(150, 0)))
                     {
+                        ImGui.EndPopup();
                         Close();
+                        return;
                     }
                 }
                 else
@@ -99,7 +119,9 @@ namespace GitDesktop.UI
 
         private void Close()
         {
+            isClosed = true;
             ViewManager.RemoveView?.Invoke(this);
+            onClosed?.Invoke();
         }
     }
 }
