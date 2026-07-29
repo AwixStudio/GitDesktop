@@ -98,6 +98,10 @@ namespace GitDesktop
 
         private void ProcessUI()
         {
+            // Don't render UI if window is minimized (size is 0)
+            if (window.FramebufferSize.X == 0 || window.FramebufferSize.Y == 0)
+                return;
+
             // iterate over a copy of the views list to avoid modification during iteration
             var viewsCopy = new List<IRender>(views);
             foreach (var view in viewsCopy)
@@ -140,7 +144,10 @@ namespace GitDesktop
                     return;
 
                 // Show popup only when we know there are updates
-                autoPullPopup = new UpdateProgressPopup("Auto-Pull Progress");
+                autoPullPopup = new UpdateProgressPopup("Auto-Pull Progress", () =>
+                {
+                    autoPullPopup = null;
+                });
 
                 // Perform the auto-pull with progress updates
                 bool pullSuccess = await repository.AutoPullFromRemote((status, progress) =>
