@@ -18,6 +18,11 @@ namespace GitDesktop
 
         private List<IRender> views;
 
+        // Auto-pull on focus mechanism
+        private DateTime lastAutoPullTime = DateTime.MinValue;
+        private const int AUTO_PULL_DEBOUNCE_MS = 5000; // Don't pull more often than every 5 seconds
+        private UpdateProgressPopup? autoPullPopup;
+
         public Application()
         {
             var options = WindowOptions.Default;
@@ -106,6 +111,74 @@ namespace GitDesktop
             if (focused)
             {
                 repositoryManager.RefreshChanges();
+
+                // Auto-pull with debounce to prevent frequent pulls
+                var now = DateTime.UtcNow;
+                if ((now - lastAutoPullTime).TotalMilliseconds > AUTO_PULL_DEBOUNCE_MS 
+                    && repositoryManager.CurrentRepository != null
+                    && autoPullPopup == null)
+                {
+                    lastAutoPullTime = now;
+                    PerformAutoPull();
+                }
+            }
+        }
+
+        private async void PerformAutoPull()
+        {
+            try
+            {
+                autoPullPopup = new UpdateProgressPopup("Auto-Pull Progress");
+
+                var repository = repositoryManager.CurrentRepository;
+                if (repository == null)
+                {
+                    if (autoPullPopup != null)
+                    {
+                        ViewManager.RemoveView?.Invoke(autoPullPopup);
+                        autoPullPopup = null;
+                    }
+                    return;
+                }
+
+                // Perform the auto-pull with progress updates
+                bool hadUpdates = await repository.AutoPullFromRemote((status, progress) =>
+                {
+                    if (autoPullPopup != null)
+                    {
+                        autoPullPopup.UpdateStatus(status, progress);
+                    }
+                });
+
+                if (hadUpdates)
+                {
+                    if (autoPullPopup != null)
+                    {
+                        autoPullPopup.Complete();
+                    }
+                }
+                else
+                {
+                    // No updates available, close the popup after a short delay
+                    CloseAutoPullPopupDelayed();
+                }
+            }
+            catch (Exception ex)
+            {
+                if (autoPullPopup != null)
+                {
+                    autoPullPopup.Error($"Auto-pull error: {ex.Message}");
+                }
+            }
+        }
+
+        private async void CloseAutoPullPopupDelayed()
+        {
+            await Task.Delay(1000);
+            if (autoPullPopup != null)
+            {
+                ViewManager.RemoveView?.Invoke(autoPullPopup);
+                autoPullPopup = null;
             }
         }
 

@@ -390,6 +390,34 @@ namespace GitDesktop.Git
         }
 
         /// <summary>
+        /// Performs an auto-pull if there are remote updates available.
+        /// This is called when the application gains focus.
+        /// </summary>
+        public async Task<bool> AutoPullFromRemote(Action<string, float> onProgress)
+        {
+            try
+            {
+                // Check if there are updates to pull
+                bool hasUpdates = await GitService.HasRemoteUpdates(Path);
+
+                if (!hasUpdates)
+                {
+                    return false;
+                }
+
+                // Perform the update/pull
+                await UpdateFromMain(onProgress);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                onProgress($"Auto-pull failed: {ex.Message}", 0);
+                Logger.Log($"Auto-pull failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Refresh the list of branches from the repository
         /// </summary>
         public void RefreshBranches()

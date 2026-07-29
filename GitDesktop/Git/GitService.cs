@@ -245,6 +245,36 @@ namespace GitDesktop.Git
             return commits;
         }
 
+        public static async Task<bool> HasRemoteUpdates(string repositoryPath)
+        {
+            try
+            {
+                // Fetch without pulling to check if there are updates
+                await ExecuteAsync(repositoryPath, "fetch origin");
+
+                // Get current branch name
+                string currentBranch = Execute(repositoryPath, "rev-parse --abbrev-ref HEAD").Trim();
+
+                // Check if local branch is behind remote
+                string behindOutput = Execute(repositoryPath, $"rev-list --left-right --count {currentBranch}...origin/{currentBranch}").Trim();
+
+                if (string.IsNullOrEmpty(behindOutput))
+                    return false;
+
+                var counts = behindOutput.Split('\t');
+                if (counts.Length == 2 && int.TryParse(counts[1], out int remoteAhead))
+                {
+                    return remoteAhead > 0;
+                }
+
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public static async Task<MergeConflictResult> UpdateFromMain(string repositoryPath, Action<string, float> onProgress)
         {
             onProgress("Fetching...", 5);
