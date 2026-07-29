@@ -23,7 +23,7 @@ namespace GitDesktop.UI
 
         public void Render()
         {
-            ImGui.Begin("Settings", ref isOpen);
+            ImGui.Begin("Settings", ref isOpen, ImGuiWindowFlags.NoDocking);
 
             ImGui.Text("Git Configuration");
             ImGui.Separator();
