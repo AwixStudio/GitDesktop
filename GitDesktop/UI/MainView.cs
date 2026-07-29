@@ -178,10 +178,10 @@ namespace GitDesktop.UI
             }
 
             ImGui.SameLine(0, 20);
-            ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 4);
 
             if (repositoryManager.CurrentRepository != null)
             {
+                ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 4);
                 // Update button
                 ImGui.BeginGroup();
                 ImGui.Dummy(new Vector2(0, ImGui.GetTextLineHeightWithSpacing())); // miejsce na etykietę
