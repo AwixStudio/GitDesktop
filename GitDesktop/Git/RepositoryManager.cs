@@ -16,6 +16,8 @@ namespace GitDesktop.Git
         public Repository? CurrentRepository { get; private set; }
         public GitFile? SelectedFile { get; set; }
 
+        public static event Action OnBranchChanged = delegate { };
+
         public RepositoryManager()
         {
             appConfigPath = Path.Combine(AppContext.BaseDirectory, APP_CONFIG_FILE_NAME);
@@ -148,6 +150,8 @@ namespace GitDesktop.Git
                 CurrentRepository.RefreshChanges(status.Files);
             }
         }
+
+        public static void ChangedBranch() => OnBranchChanged.Invoke();
     }
 
     internal class AppConfig
@@ -236,6 +240,8 @@ namespace GitDesktop.Git
                         commits = [];
                         hasMoreCommits = false;
                     }
+
+                    RepositoryManager.ChangedBranch();
                 }
                 catch (Exception ex)
                 {

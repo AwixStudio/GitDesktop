@@ -934,5 +934,59 @@ namespace GitDesktop.Git
                 return null;
             }
         }
+
+        /// <summary>
+        /// Retrieves the global git user.name configuration
+        /// </summary>
+        public static string GetGitUserName()
+        {
+            try
+            {
+                string result = ExecuteWithoutRepository(AppContext.BaseDirectory, "config --global user.name").Trim();
+                return string.IsNullOrEmpty(result) ? "Local user" : result;
+            }
+            catch
+            {
+                return "Local user";
+            }
+        }
+
+        /// <summary>
+        /// Retrieves the global git user.email configuration
+        /// </summary>
+        public static string GetGitUserEmail()
+        {
+            try
+            {
+                string result = ExecuteWithoutRepository(AppContext.BaseDirectory, "config --global user.email").Trim();
+                return result;
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        /// <summary>
+        /// Sets the global git user.name configuration
+        /// </summary>
+        public static void SetGitUserName(string userName)
+        {
+            if (string.IsNullOrEmpty(userName))
+                return;
+
+            ExecuteWithoutRepository(AppContext.BaseDirectory, $"config --global user.name \"{userName}\"");
+        }
+
+        /// <summary>
+        /// Sets the global git user.email configuration
+        /// </summary>
+        public static void SetGitUserEmail(string userEmail)
+        {
+            if (string.IsNullOrEmpty(userEmail))
+                return;
+
+            ExecuteWithoutRepository(AppContext.BaseDirectory, $"config --global user.email \"{userEmail}\"");
+        }
     }
 }

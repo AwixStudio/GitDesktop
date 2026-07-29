@@ -76,6 +76,19 @@ namespace GitDesktop
 
             input = window.CreateInput();
             imGui = new ImGuiController(window, gl, input);
+
+            // Initialize git configuration on startup
+            string currentUserName = GitService.GetGitUserName();
+            string currentUserEmail = GitService.GetGitUserEmail();
+
+            // If no email is configured, use a default and save it
+            if (string.IsNullOrEmpty(currentUserEmail))
+            {
+                GitService.SetGitUserEmail("user@example.com");
+            }
+
+            RepositoryManager.OnBranchChanged += PerformAutoPull;
+            PerformAutoPull();
         }
 
         private void OnUpdate(double deltaTime)
