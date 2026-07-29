@@ -128,8 +128,13 @@ namespace GitDesktop
             }
         }
 
+        private static bool isPulling = false; // Flag to prevent concurrent pulls
         private async void PerformAutoPull()
         {
+            if (isPulling)
+                return;
+            isPulling = true;
+
             try
             {
                 var repository = repositoryManager.CurrentRepository;
@@ -169,6 +174,10 @@ namespace GitDesktop
                 {
                     autoPullPopup.Error($"Auto-pull error: {ex.Message}");
                 }
+            }
+            finally 
+            { 
+                isPulling = false;
             }
         }
 
