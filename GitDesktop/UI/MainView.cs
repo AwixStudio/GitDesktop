@@ -11,6 +11,7 @@ namespace GitDesktop.UI
         private readonly CloneRepositoryDialog cloneRepositoryDialog;
         private readonly CreateRepositoryDialog createRepositoryDialog;
         private readonly CreateBranchDialogHelper createBranchDialogHelper;
+        private readonly DeleteBranchDialogHelper deleteBranchDialogHelper;
         private readonly SearchableComboHelper branchComboHelper;
 
         private readonly MenuItem repositoryMenu_addExisting;
@@ -23,6 +24,7 @@ namespace GitDesktop.UI
 
         private readonly MenuItem branchMenu_createNew;
         private readonly MenuItem branchMenu_resetHard;
+        private readonly MenuItem branchMenu_delete;
         private readonly Menu branchMenu;
 
         private readonly MenuItem settingsMenu_credits;
@@ -37,6 +39,7 @@ namespace GitDesktop.UI
             cloneRepositoryDialog = new CloneRepositoryDialog(repositoryManager);
             createRepositoryDialog = new CreateRepositoryDialog(repositoryManager);
             createBranchDialogHelper = new CreateBranchDialogHelper(repositoryManager);
+            deleteBranchDialogHelper = new DeleteBranchDialogHelper(repositoryManager);
             branchComboHelper = new SearchableComboHelper();
 
             repositoryMenu_addExisting = new("Add existing repository", () => addExistingRepositoryDialog.Open());
@@ -58,11 +61,13 @@ namespace GitDesktop.UI
 
             branchMenu_createNew = new("Create new branch", () => createBranchDialogHelper.Open());
             branchMenu_resetHard = new("Hard reset", () => repositoryManager.CurrentRepository?.HardReset());
+            branchMenu_delete = new("Delete current branch", () => DeleteCurrentBranch());
 
             branchMenu = new("Branch",
             [
                 branchMenu_createNew,
-                branchMenu_resetHard
+                branchMenu_resetHard,
+                branchMenu_delete
             ]);
 
             settingsMenu_credits = new("Options", () => new SettingsView());
@@ -259,6 +264,33 @@ namespace GitDesktop.UI
             }
 
             ImGui.End();
+        }
+
+        private void DeleteCurrentBranch()
+        {
+            if (repositoryManager.CurrentRepository == null)
+            {
+                Logger.Log("Not selected repository");
+                return;
+            }
+
+            var currentBranch = repositoryManager.CurrentRepository.CurrentBranch;
+            if (currentBranch == null)
+            {
+                Logger.Log("No current branch");
+                return;
+            }
+
+            // Check if current branch is master or main
+            if (currentBranch.Name.Equals("master", StringComparison.OrdinalIgnoreCase) ||
+                currentBranch.Name.Equals("main", StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.Log($"Cannot delete the '{currentBranch.Name}' branch");
+                return;
+            }
+
+            // Open the confirmation dialog
+            deleteBranchDialogHelper.Open(currentBranch.Name);
         }
 
         private void RemoveCurrentRepositoryFromList()
