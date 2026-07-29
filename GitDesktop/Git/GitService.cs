@@ -625,6 +625,35 @@ namespace GitDesktop.Git
                 string error = process.StandardError.ReadToEnd();
                 throw new Exception($"Git branch failed: {error}");
             }
+
+            // Push the new branch to remote
+            PushBranchToRemote(repositoryPath, branchName);
+        }
+
+        private static void PushBranchToRemote(string repositoryPath, string branchName)
+        {
+            var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "git",
+                    Arguments = $"push -u origin {branchName}",
+                    WorkingDirectory = repositoryPath,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+
+            process.Start();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                string error = process.StandardError.ReadToEnd();
+                throw new Exception($"Git push failed: {error}");
+            }
         }
 
         /// <summary>

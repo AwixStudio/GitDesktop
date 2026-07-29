@@ -397,15 +397,6 @@ namespace GitDesktop.Git
         {
             try
             {
-                // Check if there are updates to pull
-                bool hasUpdates = await GitService.HasRemoteUpdates(Path);
-
-                if (!hasUpdates)
-                {
-                    return false;
-                }
-
-                // Perform the update/pull
                 await UpdateFromMain(onProgress);
                 return true;
             }
