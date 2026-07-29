@@ -658,13 +658,13 @@ namespace GitDesktop.Git
 
         public static void DeleteBranch(string repositoryPath, string branchName, bool deleteRemote = false)
         {
-            // Delete local branch
+            // Delete local branch (force delete with -D to handle unmerged branches)
             var process = new Process
             {
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = "git",
-                    Arguments = $"branch -d {branchName}",
+                    Arguments = $"branch -D {branchName}",
                     WorkingDirectory = repositoryPath,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
