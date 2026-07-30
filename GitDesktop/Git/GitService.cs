@@ -105,19 +105,22 @@ namespace GitDesktop.Git
 
         public static void CheckoutBranch(string repositoryPath, string branchName)
         {
-            Execute(repositoryPath, $"checkout \"{branchName}\"");
+            ExecuteWithArgs(repositoryPath, "checkout", branchName);
         }
 
         public static void CommitChanges(string repositoryPath, string commitMessage, List<GitFile> files)
         {
             var selectedFiles = files
                 .Where(f => f.MarkedForCommit)
-                .Select(f => $"\"{f.Path}\"");
+                .Select(f => f.Path)
+                .ToList();
 
-            string arguments = "add " + string.Join(' ', selectedFiles);
+            // Build arguments list properly - each file path is a separate argument
+            var addArgs = new List<string> { "add" };
+            addArgs.AddRange(selectedFiles);
+            ExecuteWithArgs(repositoryPath, addArgs.ToArray());
 
-            Execute(repositoryPath, arguments);
-            Execute(repositoryPath, $"commit -m \"{commitMessage}\"");
+            ExecuteWithArgs(repositoryPath, "commit", "-m", commitMessage);
             Execute(repositoryPath, "push");
         }
 
@@ -158,7 +161,7 @@ namespace GitDesktop.Git
             // Set default branch name using config (works before first commit)
             try
             {
-                Execute(repositoryPath, $"config init.defaultBranch {branchName}");
+                ExecuteWithArgs(repositoryPath, "config", "init.defaultBranch", branchName);
             }
             catch
             {
@@ -172,14 +175,14 @@ namespace GitDesktop.Git
                 File.WriteAllText(readmePath, $"# {Path.GetFileName(repositoryPath)}\n\nInitial repository\n");
 
                 Execute(repositoryPath, "add README.md");
-                Execute(repositoryPath, "config user.email \"info@example.com\"");
-                Execute(repositoryPath, "config user.name \"Local User\"");
-                Execute(repositoryPath, $"commit -m \"Initial commit\"");
+                ExecuteWithArgs(repositoryPath, "config", "user.email", "info@example.com");
+                ExecuteWithArgs(repositoryPath, "config", "user.name", "Local User");
+                ExecuteWithArgs(repositoryPath, "commit", "-m", "Initial commit");
 
                 // Set symbolic-ref after first commit succeeds
                 try
                 {
-                    Execute(repositoryPath, $"symbolic-ref HEAD refs/heads/{branchName}");
+                    ExecuteWithArgs(repositoryPath, "symbolic-ref", "HEAD", $"refs/heads/{branchName}");
                 }
                 catch { }
             }
@@ -244,8 +247,7 @@ namespace GitDesktop.Git
 
         public static List<GitCommit> GetCommitLog(string repositoryPath, string branchName, int limit, int offset)
         {
-            string gitLogCmd = "log " + branchName + " --pretty=format:\\\"" + "%H|%an|%ai|%s|%P" + "\\\" --max-count=" + (limit + 1) + " --skip=" + offset;
-            string gitLogCmdResult = Execute(repositoryPath, gitLogCmd);
+            string gitLogCmdResult = ExecuteWithArgs(repositoryPath, "log", branchName, "--pretty=format:%H|%an|%ai|%s|%P", $"--max-count={limit + 1}", $"--skip={offset}");
 
             List<GitCommit> commits = [];
             int count = 0;
@@ -284,7 +286,7 @@ namespace GitDesktop.Git
                 string currentBranch = Execute(repositoryPath, "rev-parse --abbrev-ref HEAD").Trim();
 
                 // Check if local branch is behind remote
-                string behindOutput = Execute(repositoryPath, $"rev-list --left-right --count {currentBranch}...origin/{currentBranch}").Trim();
+                string behindOutput = ExecuteWithArgs(repositoryPath, "rev-list", "--left-right", "--count", $"{currentBranch}...origin/{currentBranch}").Trim();
 
                 if (string.IsNullOrEmpty(behindOutput))
                     return false;
@@ -375,8 +377,7 @@ namespace GitDesktop.Git
             try
             {
                 // For untracked files, show the content instead of diff
-                string gitDiffCmd = $"diff HEAD -- \"{filePath}\"";
-                string gitDiffResult = Execute(repositoryPath, gitDiffCmd);
+                string gitDiffResult = ExecuteWithArgs(repositoryPath, "diff", "HEAD", "--", filePath);
 
                 // Limit diff to first 30 lines
                 var lines = gitDiffResult.Split('\n');
@@ -388,8 +389,8 @@ namespace GitDesktop.Git
                 // If diff fails, try to show file content for untracked files
                 try
                 {
-                    string showCmd = $"show :{filePath}";
-                    return Execute(repositoryPath, showCmd);
+                    string gitDiffResult = ExecuteWithArgs(repositoryPath, "show", $":{filePath}");
+                    return gitDiffResult;
                 }
                 catch
                 {
@@ -462,17 +463,17 @@ namespace GitDesktop.Git
             if (strategy != "ours" && strategy != "theirs")
                 throw new ArgumentException("Strategy must be 'ours' or 'theirs'", nameof(strategy));
 
-            string cmd = $"checkout --{strategy} -- \"{filePath}\"";
-            Execute(repositoryPath, cmd);
+            string cmd = $"--{strategy}";
+            ExecuteWithArgs(repositoryPath, "checkout", cmd, "--", filePath);
 
             // Stage the resolved file
-            Execute(repositoryPath, $"add \"{filePath}\"");
+            ExecuteWithArgs(repositoryPath, "add", filePath);
         }
 
         public static void CompleteMerge(string repositoryPath, string commitMessage)
         {
             // Complete the merge by committing
-            Execute(repositoryPath, $"commit -m \"{commitMessage}\"");
+            ExecuteWithArgs(repositoryPath, "commit", "-m", commitMessage);
         }
 
         public static void AbortMerge(string repositoryPath)
@@ -516,13 +517,15 @@ namespace GitDesktop.Git
             IEnumerable<GitFile> files)
         {
             var paths = files
-                .Select(f => $"\"{f.Path.Trim('"')}\"")
+                .Select(f => f.Path.Trim('"'))
                 .ToList();
 
             if (paths.Count == 0)
                 return;
 
-            Execute(repositoryPath, $"{command} {string.Join(' ', paths)}");
+            var args = new List<string> { command };
+            args.AddRange(paths);
+            ExecuteWithArgs(repositoryPath, args.ToArray());
         }
 
         private static string Execute(string repositoryPath, string arguments)
@@ -548,6 +551,42 @@ namespace GitDesktop.Git
             if (process.ExitCode != 0)
             {
                 Console.WriteLine(arguments);
+                throw new InvalidOperationException(
+                    $"Git exited with code {process.ExitCode}\n{error}");
+            }
+
+            return output;
+        }
+
+        // Helper method to properly handle arguments with spaces using ArgumentList
+        private static string ExecuteWithArgs(string repositoryPath, params string[] arguments)
+        {
+            Process process = new();
+            process.StartInfo.FileName = gitExe;
+            process.StartInfo.WorkingDirectory = repositoryPath;
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.CreateNoWindow = true;
+            process.StartInfo.StandardOutputEncoding = Encoding.UTF8;
+            process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.StandardErrorEncoding = Encoding.UTF8;
+
+            // Use ArgumentList to properly handle arguments with spaces
+            foreach (var arg in arguments)
+            {
+                process.StartInfo.ArgumentList.Add(arg);
+            }
+
+            process.Start();
+
+            string output = process.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
+
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                Console.WriteLine(string.Join(" ", arguments));
                 throw new InvalidOperationException(
                     $"Git exited with code {process.ExitCode}\n{error}");
             }
@@ -615,6 +654,39 @@ namespace GitDesktop.Git
             process.StartInfo.StandardErrorEncoding = Encoding.UTF8;
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.CreateNoWindow = true;
+
+            process.Start();
+
+            string output = process.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
+
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException(error);
+
+            return output;
+        }
+
+        // Helper method to properly handle arguments with spaces using ArgumentList
+        public static string ExecuteWithoutRepositoryWithArgs(string workingDirectory, params string[] arguments)
+        {
+            Process process = new();
+
+            process.StartInfo.FileName = gitExe;
+            process.StartInfo.WorkingDirectory = workingDirectory;
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.StandardOutputEncoding = Encoding.UTF8;
+            process.StartInfo.StandardErrorEncoding = Encoding.UTF8;
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.CreateNoWindow = true;
+
+            // Use ArgumentList to properly handle arguments with spaces
+            foreach (var arg in arguments)
+            {
+                process.StartInfo.ArgumentList.Add(arg);
+            }
 
             process.Start();
 
@@ -1003,7 +1075,7 @@ namespace GitDesktop.Git
             if (string.IsNullOrEmpty(userName))
                 return;
 
-            ExecuteWithoutRepository(AppContext.BaseDirectory, $"config --global user.name \"{userName}\"");
+            ExecuteWithoutRepositoryWithArgs(AppContext.BaseDirectory, "config", "--global", "user.name", userName);
         }
 
         /// <summary>
@@ -1014,7 +1086,7 @@ namespace GitDesktop.Git
             if (string.IsNullOrEmpty(userEmail))
                 return;
 
-            ExecuteWithoutRepository(AppContext.BaseDirectory, $"config --global user.email \"{userEmail}\"");
+            ExecuteWithoutRepositoryWithArgs(AppContext.BaseDirectory, "config", "--global", "user.email", userEmail);
         }
     }
 }
