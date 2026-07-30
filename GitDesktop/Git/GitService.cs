@@ -27,6 +27,14 @@ namespace GitDesktop.Git
                 char workingTree = line[1];
                 string path = line.Substring(3);
 
+                // Remove quotes if present - git uses quotes for paths with special characters
+                if (path.StartsWith('"') && path.EndsWith('"'))
+                {
+                    path = path.Substring(1, path.Length - 2);
+                    // Unescape special characters that git escapes
+                    path = path.Replace("\\\"", "\"").Replace("\\\\", "\\");
+                }
+
                 GitFile file = new()
                 {
                     Path = path,
@@ -416,6 +424,14 @@ namespace GitDesktop.Git
                     if (parts.Length > 1)
                     {
                         string filePath = parts[1];
+
+                        // Remove quotes if present - git uses quotes for paths with special characters
+                        if (filePath.StartsWith('"') && filePath.EndsWith('"'))
+                        {
+                            filePath = filePath.Substring(1, filePath.Length - 2);
+                            filePath = filePath.Replace("\\\"", "\"").Replace("\\\\", "\\");
+                        }
+
                         // Add each unique file path only once
                         if (uniquePaths.Add(filePath))
                         {
@@ -444,6 +460,14 @@ namespace GitDesktop.Git
                         if (statusCode[0] == 'U' || statusCode[1] == 'U')
                         {
                             string filePath = line.Substring(3);
+
+                            // Remove quotes if present - git uses quotes for paths with special characters
+                            if (filePath.StartsWith('"') && filePath.EndsWith('"'))
+                            {
+                                filePath = filePath.Substring(1, filePath.Length - 2);
+                                filePath = filePath.Replace("\\\"", "\"").Replace("\\\\", "\\");
+                            }
+
                             conflictedFiles.Add(new ConflictedFile { Path = filePath });
                         }
                     }
