@@ -547,7 +547,12 @@ namespace GitDesktop.Git
             if (paths.Count == 0)
                 return;
 
-            var args = new List<string> { command };
+            var args = new List<string>();
+            // Split command into individual parts (e.g., "restore --staged --" -> ["restore", "--staged", "--"])
+            foreach (var part in command.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                args.Add(part);
+            }
             args.AddRange(paths);
             ExecuteWithArgs(repositoryPath, args.ToArray());
         }
