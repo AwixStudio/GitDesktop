@@ -18,7 +18,7 @@ namespace GitDesktop.Git.Providers
 
         public void CreatePullRequest(string repositoryPath, string title, string sourceBranch, string targetBranch)
         {
-            string url = $"https://github.com/{owner}/{repositoryName}/compare/{targetBranch}...{sourceBranch}?expand=1";
+            string url = $"https://github.com/{owner}/{repositoryName}/compare/{sourceBranch}?expand=1";
 
             Process.Start(new ProcessStartInfo
             {

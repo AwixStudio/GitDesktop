@@ -18,22 +18,21 @@ namespace GitDesktop.Git
 
         public static GitStatus GetStatus(string repositoryPath)
         {
-            string gitStatusCmdResult = Execute(repositoryPath, "status --porcelain -uall");
+            // NUL-delimited porcelain returns literal UTF-8 paths, regardless of core.quotePath.
+            string gitStatusCmdResult = Execute(repositoryPath, "status --porcelain=v1 -z -uall");
 
             GitStatus status = new();
-            foreach (string line in gitStatusCmdResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            string[] records = gitStatusCmdResult.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < records.Length; i++)
             {
+                string line = records[i];
                 char index = line[0];
                 char workingTree = line[1];
                 string path = line.Substring(3);
 
-                // Remove quotes if present - git uses quotes for paths with special characters
-                if (path.StartsWith('"') && path.EndsWith('"'))
-                {
-                    path = path.Substring(1, path.Length - 2);
-                    // Unescape special characters that git escapes
-                    path = path.Replace("\\\"", "\"").Replace("\\\\", "\\");
-                }
+                // With -z, renames/copies contain destination first, then a separate source path.
+                if (index is 'R' or 'C' || workingTree is 'R' or 'C')
+                    i++;
 
                 GitFile file = new()
                 {
@@ -124,7 +123,7 @@ namespace GitDesktop.Git
                 .ToList();
 
             // Build arguments list properly - each file path is a separate argument
-            var addArgs = new List<string> { "add" };
+            var addArgs = new List<string> { "add", "--" };
             addArgs.AddRange(selectedFiles);
             ExecuteWithArgs(repositoryPath, addArgs.ToArray());
 
@@ -414,23 +413,16 @@ namespace GitDesktop.Git
             try
             {
                 // Use git ls-files -u which shows exactly the unmerged files during a merge conflict
-                // Output format: [stage] [hash] [path]
-                string lsFilesResult = Execute(repositoryPath, "ls-files -u");
+                // Each NUL-delimited record contains metadata, a tab, then the literal path.
+                string lsFilesResult = Execute(repositoryPath, "ls-files -u -z");
                 var uniquePaths = new HashSet<string>();
 
-                foreach (string line in lsFilesResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                foreach (string line in lsFilesResult.Split('\0', StringSplitOptions.RemoveEmptyEntries))
                 {
-                    var parts = line.Split('\t');
-                    if (parts.Length > 1)
+                    int separator = line.IndexOf('\t');
+                    if (separator >= 0)
                     {
-                        string filePath = parts[1];
-
-                        // Remove quotes if present - git uses quotes for paths with special characters
-                        if (filePath.StartsWith('"') && filePath.EndsWith('"'))
-                        {
-                            filePath = filePath.Substring(1, filePath.Length - 2);
-                            filePath = filePath.Replace("\\\"", "\"").Replace("\\\\", "\\");
-                        }
+                        string filePath = line.Substring(separator + 1);
 
                         // Add each unique file path only once
                         if (uniquePaths.Add(filePath))
@@ -445,30 +437,15 @@ namespace GitDesktop.Git
                 // Fallback: try git status --porcelain if ls-files fails
                 try
                 {
-                    string gitStatusResult = Execute(repositoryPath, "status --porcelain");
-
-                    foreach (string line in gitStatusResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                    foreach (GitFile file in GetStatus(repositoryPath).Files)
                     {
-                        if (line.Length < 3)
-                            continue;
-
-                        // During merge conflicts, status shows: UU, AA, DD, UD, AU, etc.
-                        // where U = Unmerged, and both positions indicate unmerged state
-                        string statusCode = line.Substring(0, 2);
-
-                        // Both characters must be non-space and one must be U (unmerged)
-                        if (statusCode[0] == 'U' || statusCode[1] == 'U')
+                        // AA and DD are also unmerged states, even without a U.
+                        if (file.IndexState == GitFileState.Conflicted ||
+                            file.WorkingTreeState == GitFileState.Conflicted ||
+                            (file.IndexState == GitFileState.Added && file.WorkingTreeState == GitFileState.Added) ||
+                            (file.IndexState == GitFileState.Deleted && file.WorkingTreeState == GitFileState.Deleted))
                         {
-                            string filePath = line.Substring(3);
-
-                            // Remove quotes if present - git uses quotes for paths with special characters
-                            if (filePath.StartsWith('"') && filePath.EndsWith('"'))
-                            {
-                                filePath = filePath.Substring(1, filePath.Length - 2);
-                                filePath = filePath.Replace("\\\"", "\"").Replace("\\\\", "\\");
-                            }
-
-                            conflictedFiles.Add(new ConflictedFile { Path = filePath });
+                            conflictedFiles.Add(new ConflictedFile { Path = file.Path });
                         }
                     }
                 }
@@ -491,7 +468,7 @@ namespace GitDesktop.Git
             ExecuteWithArgs(repositoryPath, "checkout", cmd, "--", filePath);
 
             // Stage the resolved file
-            ExecuteWithArgs(repositoryPath, "add", filePath);
+            ExecuteWithArgs(repositoryPath, "add", "--", filePath);
         }
 
         public static void CompleteMerge(string repositoryPath, string commitMessage)
@@ -541,7 +518,7 @@ namespace GitDesktop.Git
             IEnumerable<GitFile> files)
         {
             var paths = files
-                .Select(f => f.Path.Trim('"'))
+                .Select(f => f.Path)
                 .ToList();
 
             if (paths.Count == 0)
